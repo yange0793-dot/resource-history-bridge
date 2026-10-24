@@ -8,9 +8,9 @@
 
 > The requested item was created under a different Azure OpenAI resource.
 
-第一次仍发送原始 JSON 请求字节；恢复请求只去掉 `input` 数组中 **`reasoning.id` 和 `function_call.id`**。保留 `encrypted_content`、工具 `call_id`、`name`、`arguments`、工具输出、文本、模型和所有其他请求字段。其他类型的 `id` 不删除，不生成替代 `call_id`，不改 session/header/cache 身份，不切上游、模型或密钥。
+第一次仍发送原始 JSON 请求字节；恢复请求只去掉 `input` 数组中 **`reasoning.id` 和 `function_call.id`**。保留 `encrypted_content`、工具 `call_id`、`name`、`arguments`、工具输出、文本、模型和所有其他请求字段。遇到其他类型的顶层 item `id` 则拒绝恢复，不删除它们、不重打一条不确定的投影；不生成替代 `call_id`，不改 session/header/cache 身份，不切上游、模型或密钥。
 
-识别范围是 HTTP 400 JSON 错误，或提交前 SSE 的已知 `error` / `response.failed` 帧。其他 400、认证失败、限流、500、断网和无细节错误不重试。总共最多两次上游请求，第二次错误直接透传；不是通用重试器。
+识别范围是 HTTP 400 JSON 错误，或 HTTP 2xx / 400 提交前 SSE 的已知 `error` / `response.failed` 帧。纯库也只识别实际错误 envelope；字符串必须先成功解析为 JSON，prompt / delta / 普通 message 含错误原句不会触发。含正文输出或未知字段的错误不参与恢复。其他 400、认证失败、限流、500、断网和无细节错误不重试。总共最多两次上游请求，第二次错误直接透传；不是通用重试器。
 
 这一投影方法依据一次 AgentRouter Azure 后端的工具续接对照实验：原生回放跨资源失败，去掉两类 item ID、保留加密 reasoning 与工具配对后得到 `RESULT_42`。**独立桥本身只做了本机 mock 回归，未对真实上游联网验证，也不保证其他供应商、全部历史类型或长期负载有效。**
 
@@ -19,16 +19,16 @@
 需要 Node.js 18 或更新版本。不需要 `npm install`。
 
 ```sh
-cd /Users/tufu/Documents/zcode/resource-history-bridge
+cd resource-history-bridge
 node --test
 RHB_UPSTREAM=https://api.example.com/v1 node cli.js
 ```
 
 `api.example.com` 只是占位地址：改成你实际使用的 Responses 服务 API Base URL。URL 不允许用户名、密码、query 或 fragment。Base URL 为 `/v1` 时会请求上游 `/v1/responses`，为根路径时会请求 `/responses`；按上游真实入口填写，不要重复 `/v1`。
 
-默认监听 `http://127.0.0.1:8787/v1`。在 Agent 的 **API Base URL / Base URL / endpoint** 字段中填这个地址，并继续选择原模型、Responses 协议和原 API key。客户端发出的 Authorization / `api-key` / `x-api-key` 等 header 会透传。模型仍在调用方请求 JSON 中指定。
+默认监听 `http://127.0.0.1:8790/v1`。在 Agent 的 **API Base URL / Base URL / endpoint** 字段中填这个地址，并继续选择原模型、Responses 协议和原 API key。客户端发出的 Authorization / `api-key` / `x-api-key` 等 header 会透传。模型仍在调用方请求 JSON 中指定。
 
-如果客户端不能更改 API Base URL，或它只支持其他协议，这个桥不能让它自动生效。SDK 若会自动补 `/v1`，Base URL 应填写 `http://127.0.0.1:8787`；桥同时接受 `/responses` 和 `/v1/responses`。
+如果客户端不能更改 API Base URL，或它只支持其他协议，这个桥不能让它自动生效。SDK 若会自动补 `/v1`，Base URL 应填写 `http://127.0.0.1:8790`；桥同时接受 `/responses` 和 `/v1/responses`。
 
 按 `Ctrl+C` 停止。CLI 不接受任何 argv，包括密钥参数。
 
@@ -66,7 +66,7 @@ unset RHB_API_KEY
 | `RHB_API_KEY` | 未设置 | 不设置则使用调用方 header；设置则覆盖上游密钥 |
 | `RHB_KEY_HEADER` | `authorization` | 仅 `authorization` / `api-key` / `x-api-key` |
 | `RHB_HOST` | `127.0.0.1` | 仅 `127.0.0.1` / `::1` / `localhost` |
-| `RHB_PORT` | `8787` | 1–65535 |
+| `RHB_PORT` | `8790` | 1–65535 |
 | `RHB_TIMEOUT_MS` | `180000` | 从接收请求体到两次上游结束的共用总时限，1–1800000 ms |
 | `RHB_REQUEST_LIMIT` | `8388608` | 请求体最大字节数，最大 64 MiB |
 | `RHB_BUFFER_LIMIT` | `65536` | 提交前错误/SSE 缓冲上限，最大 64 KiB；到上限即透传且不恢复 |
@@ -80,7 +80,7 @@ const {
   isKnownResourceError,
   projectResponsesHistory,
   createBridge
-} = require('/Users/tufu/Documents/zcode/resource-history-bridge');
+} = require('./');
 
 // requestBody 必须是你自己的完整 Responses 历史；不要只给引用。
 const projection = projectResponsesHistory(requestBody);
@@ -94,11 +94,11 @@ const bridge = createBridge({
   apiKey: process.env.RHB_API_KEY,
   timeoutMs: 180000
 });
-await bridge.listen(8787);
+await bridge.listen(8790);
 // 用完后 await bridge.close(); 关闭监听、在途上游和本桥 socket。
 ```
 
-上例中的 `await` 放在 async 函数内。库的投影返回 `{ ok: true, body, removed }`，或 `{ ok: false, code, message }`。`createBridge` 返回 `{ server, listen, close }`；库允许 `listen(0)` 分配临时端口，CLI 不允许端口 0。库没有读取环境变量的隐藏行为：需要调用方显式传选项。
+上例的 `require('./')` 假设代码在包目录执行；安装到其他项目后使用包名 `require('resource-history-bridge')`。上例中的 `await` 放在 async 函数内。库的投影返回 `{ ok: true, body, removed }`，或 `{ ok: false, code, message }`。`createBridge` 返回 `{ server, listen, close }`；库允许 `listen(0)` 分配临时端口，CLI 不允许端口 0。库没有读取环境变量的隐藏行为：需要调用方显式传选项。
 
 ## 不能恢复的历史
 
@@ -106,8 +106,10 @@ await bridge.listen(8787);
 
 - 存在 `previous_response_id` 或服务器 `conversation` 引用，包括同时给了部分 `input` 的情况。
 - `item_reference`，只有文本或空 `input`，没有可展开的完整显式历史。
+- `input` 中有非对象项（字符串、null、数组或其他基元），不能安全投影。
 - 工具调用/结果缺配对、顺序不对、重复 `call_id`，或缺 `name` / `arguments` / `output`。
-- 没有支持投影的两类 item ID；其他类型的 ID 不会为了“恢复成功”而删除。
+- 存在其他类型的顶层 item ID（包括 message / function_call_output / 未知类型的 `id`）：这些类型未实测，不删除也不尝试不确定的恢复。
+- 没有支持投影的两类 item ID。
 
 普通第一次请求不会预先拒绝这些上游本可处理的历史。桥无法判断调用方是否遗漏了早期历史，只能检查明确引用和工具配对；发送完整历史仍由调用方负责。
 
@@ -131,7 +133,7 @@ await bridge.listen(8787);
 ## 测试
 
 ```sh
-node --test /Users/tufu/Documents/zcode/resource-history-bridge/test/*.test.js
+node --test
 ```
 
 测试只创建临时 loopback mock 上游/桥，结束后关闭 listener、socket 和子进程。不需要网络密钥，不访问真实上游。覆盖纯库投影、原请求不可变、身份保留、工具配对、JSON/SSE 恢复预算与提交边界、引用拒绝、请求/缓冲上限、截断、取消、超时、本机访问限制和 CLI 启停。

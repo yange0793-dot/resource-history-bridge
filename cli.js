@@ -10,7 +10,7 @@ function numberFromEnv(name, fallback) {
 async function main() {
   if (process.argv.length !== 2) throw new Error('No command-line arguments are accepted. Configure with environment variables.');
   if (!process.env.RHB_UPSTREAM) throw new Error('Set RHB_UPSTREAM to a fixed upstream API base URL, for example https://api.example.com/v1.');
-  const port = numberFromEnv('RHB_PORT', 8787);
+  const port = numberFromEnv('RHB_PORT', 8790);
   if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error('RHB_PORT must be between 1 and 65535.');
   const bridge = createBridge({
     upstream: process.env.RHB_UPSTREAM,

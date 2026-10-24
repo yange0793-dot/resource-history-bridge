@@ -10,22 +10,42 @@ function history() {
   return {
     model: 'mock-model', prompt_cache_key: 'cache-same', session_id: 'session-same', metadata: { conversation_id: 'metadata-same' },
     input: [
-      { type: 'message', role: 'user', id: 'message-keep', content: [{ type: 'input_text', text: 'Add 19 and 23' }] },
+      { type: 'message', role: 'user', content: [{ type: 'input_text', text: 'Add 19 and 23', metadata: { id: 'nested-keep' } }] },
       { type: 'reasoning', id: 'reasoning-remove', encrypted_content: 'MOCK_ENCRYPTED', summary: [] },
       { type: 'function_call', id: 'function-remove', call_id: 'call-keep', name: 'add', arguments: '{"a":19,"b":23}' },
-      { type: 'function_call_output', id: 'output-keep', call_id: 'call-keep', output: '42' }
+      { type: 'function_call_output', call_id: 'call-keep', output: '42' }
     ]
   };
 }
 
 test('known error recognizes JSON wrappers and response.failed but not other failures', () => {
-  assert.equal(isKnownResourceError({ error: { message: known } }), true);
+  assert.equal(isKnownResourceError({ error: { message: known, type: 'invalid_request_error', code: null } }), true);
+  assert.equal(isKnownResourceError(JSON.stringify({ error: { message: `${known} [trace_id=mock]` } })), true);
+  assert.equal(isKnownResourceError({ message: known, type: 'invalid_request_error', code: null }), true);
+  assert.equal(isKnownResourceError({ type: 'error', message: known }), true);
   assert.equal(isKnownResourceError({ type: 'response.failed', response: { error: { message: known } } }), true);
   assert.equal(isKnownResourceError({ error: { message: `ag API error (400): ${JSON.stringify({ message: known })}` } }), true);
   for (const value of ['different resource', 'session expired', { error: { message: 'Invalid encrypted content' } }, null, { input: known }]) {
     assert.equal(isKnownResourceError(value), false);
   }
 });
+
+for (const [name, value] of [
+  ['raw error sentence', known],
+  ['JSON string sentence', JSON.stringify(known)],
+  ['bare message', { message: known }],
+  ['prompt', { prompt: known }],
+  ['text delta', { type: 'response.output_text.delta', delta: known }],
+  ['error hidden in delta', { type: 'response.output_text.delta', error: { message: known } }],
+  ['JSON envelope output', { error: { message: known }, output: ['semantic'] }],
+  ['JSON envelope unknown', { error: { message: known }, surprise: 'unknown' }],
+  ['JSON error unknown', { error: { message: known, surprise: 'unknown' } }],
+  ['failed response output', { type: 'response.failed', response: { error: { message: known }, output: [{ type: 'message' }] } }],
+  ['failed response unknown', { type: 'response.failed', response: { error: { message: known }, surprise: 'unknown' } }],
+  ['failed event delta', { type: 'response.failed', delta: 'semantic', response: { error: { message: known } } }]
+]) {
+  test(`matcher rejects ${name}`, () => assert.equal(isKnownResourceError(value), false));
+}
 
 test('projection removes only supported item IDs and preserves complete original and tool/cache/session data', () => {
   const original = history();
@@ -37,8 +57,7 @@ test('projection removes only supported item IDs and preserves complete original
   assert.equal(result.body.input[1].encrypted_content, 'MOCK_ENCRYPTED');
   assert.equal(result.body.input[2].call_id, 'call-keep');
   assert.equal(result.body.input[3].call_id, 'call-keep');
-  assert.equal(result.body.input[0].id, 'message-keep');
-  assert.equal(result.body.input[3].id, 'output-keep');
+  assert.equal(result.body.input[0].content[0].metadata.id, 'nested-keep');
   assert.equal(result.body.prompt_cache_key, original.prompt_cache_key);
   assert.equal(result.body.session_id, original.session_id);
   assert.deepEqual(result.body.metadata, original.metadata);
@@ -53,7 +72,15 @@ for (const [name, modify, code] of [
   ['conversation', b => { b.conversation = { id: 'server' }; }, 'server_history_reference'],
   ['reference-only', b => { b.input = [{ type: 'item_reference', id: 'server' }]; }, 'item_reference'],
   ['text-only', b => { b.input = 'Hello'; }, 'explicit_history_required'],
-  ['unknown IDs', b => { b.input = [{ type: 'message', id: 'keep', content: [] }]; }, 'no_supported_item_ids'],
+  ['unknown IDs', b => { b.input = [{ type: 'message', id: 'keep', content: [] }]; }, 'unsupported_item_id'],
+  ['message ID mixed with supported IDs', b => { b.input[0].id = 'message-keep'; }, 'unsupported_item_id'],
+  ['tool output ID mixed with supported IDs', b => { b.input[3].id = 'output-keep'; }, 'unsupported_item_id'],
+  ['unknown type ID mixed with supported IDs', b => { b.input.push({ type: 'unknown_type', id: 'unknown-keep' }); }, 'unsupported_item_id'],
+  ['no supported IDs', b => { b.input = [{ type: 'message', content: [] }]; }, 'no_supported_item_ids'],
+  ['string history item', b => { b.input.push('user text'); }, 'invalid_history_item'],
+  ['null history item', b => { b.input.push(null); }, 'invalid_history_item'],
+  ['array history item', b => { b.input.push([]); }, 'invalid_history_item'],
+  ['number history item', b => { b.input.push(42); }, 'invalid_history_item'],
   ['missing output', b => { b.input.pop(); }, 'invalid_tool_pair'],
   ['orphan output', b => { b.input.splice(2, 1); }, 'invalid_tool_pair'],
   ['output before call', b => { [b.input[2], b.input[3]] = [b.input[3], b.input[2]]; }, 'invalid_tool_pair'],

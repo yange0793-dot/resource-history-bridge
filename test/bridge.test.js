@@ -117,7 +117,9 @@ for (const [name, body, code] of [
   ['previous response', { ...native, previous_response_id: 'server' }, 'server_history_reference'],
   ['conversation', { ...native, conversation: 'server' }, 'server_history_reference'],
   ['reference', { ...native, input: [{ type: 'item_reference', id: 'server' }] }, 'item_reference'],
-  ['tool pairing', { ...native, input: native.input.slice(0, 2) }, 'invalid_tool_pair']
+  ['tool pairing', { ...native, input: native.input.slice(0, 2) }, 'invalid_tool_pair'],
+  ['unsupported ID', { ...native, input: [...native.input, { type: 'message', id: 'msg-unknown', content: [] }] }, 'unsupported_item_id'],
+  ['malformed item', { ...native, input: [...native.input, null] }, 'invalid_history_item']
 ]) {
   test(`known error clearly refuses unrecoverable ${name}`, async t => {
     const f = await fixture(t, (_req, res) => json(res, 400, resourceError));
@@ -149,6 +151,38 @@ test('SSE empty lifecycle then response.failed recovers before commit', async t 
   const result = await request(f.address);
   assert.equal(result.body, delta);
   assert.equal(f.received.length, 2);
+});
+
+test('HTTP400 SSE known error recovers before commit', async t => {
+  const f = await fixture(t, (_req, res, number) => {
+    res.writeHead(number === 1 ? 400 : 200, { 'content-type': 'text/event-stream' });
+    res.end(number === 1 ? failed : delta);
+  });
+  const result = await request(f.address);
+  assert.equal(result.status, 200);
+  assert.equal(result.body, delta);
+  assert.equal(f.received.length, 2);
+});
+
+test('HTTP400 SSE output blocks recovery', async t => {
+  const payload = delta + failed;
+  const f = await fixture(t, (_req, res) => {
+    res.writeHead(400, { 'content-type': 'text/event-stream' });
+    res.end(payload);
+  });
+  const result = await request(f.address);
+  assert.equal(result.status, 400);
+  assert.equal(result.body, payload);
+  assert.equal(f.received.length, 1);
+});
+
+test('HTTP401 SSE known error cannot recover', async t => {
+  const f = await fixture(t, (_req, res) => {
+    res.writeHead(401, { 'content-type': 'text/event-stream' });
+    res.end(failed);
+  });
+  assert.equal((await request(f.address)).body, failed);
+  assert.equal(f.received.length, 1);
 });
 
 test('SSE known error event can recover without lifecycle frames', async t => {
@@ -298,6 +332,46 @@ test('client cancellation cleans upstream and does not retry', async t => {
   req.destroy();
   await closedPromise;
   assert.equal(f.received.length, 1);
+});
+
+for (const [name, body] of [
+  ['bare message', JSON.stringify({ message: known })],
+  ['ordinary delta', JSON.stringify({ type: 'response.output_text.delta', delta: known })],
+  ['unknown envelope field', JSON.stringify({ error: { message: known }, surprise: 'unknown' })],
+  ['unknown error field', JSON.stringify({ error: { message: known, surprise: 'unknown' } })],
+  ['body output', JSON.stringify({ error: { message: known }, output: [{ type: 'message' }] })]
+]) {
+  test(`HTTP400 ${name} is relayed without retry`, async t => {
+    const f = await fixture(t, (_req, res) => json(res, 400, body));
+    assert.equal((await request(f.address)).body, body);
+    assert.equal(f.received.length, 1);
+  });
+}
+
+for (const [name, payload] of [
+  ['delta quotes exact error', frame('response.output_text.delta', { delta: known })],
+  ['unknown failed event field', frame('response.failed', { surprise: 'unknown', response: { error: { message: known } } })],
+  ['unknown failed response field', frame('response.failed', { response: { surprise: 'unknown', error: { message: known } } })],
+  ['unknown error object field', frame('error', { message: known, surprise: 'unknown' })]
+]) {
+  test(`SSE ${name} is relayed without retry`, async t => {
+    const f = await fixture(t, (_req, res) => {
+      res.writeHead(200, { 'content-type': 'text/event-stream' });
+      res.end(payload);
+    });
+    assert.equal((await request(f.address)).body, payload);
+    assert.equal(f.received.length, 1);
+  });
+}
+
+test('SSE event:error without payload type remains a valid error envelope', async t => {
+  const payload = `event: error\ndata: ${JSON.stringify({ message: known, code: null })}\n\n`;
+  const f = await fixture(t, (_req, res, number) => {
+    res.writeHead(200, { 'content-type': 'text/event-stream' });
+    res.end(number === 1 ? payload : delta);
+  });
+  assert.equal((await request(f.address)).body, delta);
+  assert.equal(f.received.length, 2);
 });
 
 test('SSE failure carrying output cannot be treated as output-free error', async t => {
