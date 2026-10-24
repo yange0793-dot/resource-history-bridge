@@ -1,0 +1,12 @@
+{
+  "name": "resource-history-bridge",
+  "version": "0.1.0",
+  "description": "Local Responses bridge for bounded recovery from resource-bound history item errors",
+  "main": "index.js",
+  "bin": { "resource-history-bridge": "cli.js" },
+  "type": "commonjs",
+  "engines": { "node": ">=18" },
+  "scripts": { "test": "node --test" },
+  "private": true,
+  "license": "UNLICENSED"
+}
