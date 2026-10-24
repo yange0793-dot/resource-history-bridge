@@ -50,7 +50,10 @@ function request(address, options = {}) {
       const chunks = [];
       res.on('data', chunk => chunks.push(chunk));
       res.on('error', reject);
-      res.on('end', () => resolve({ status: res.statusCode, headers: res.headers, body: Buffer.concat(chunks).toString('utf8') }));
+      res.on('end', () => {
+        const bytes = Buffer.concat(chunks);
+        resolve({ status: res.statusCode, headers: res.headers, body: bytes.toString('utf8'), bytes });
+      });
     });
     req.on('error', reject);
     req.end(options.body === undefined ? raw : options.body);
@@ -446,6 +449,240 @@ test('closing bridge aborts all active upstreams and client sockets', async t =>
   await f.bridge.close();
   await rejected;
   await closedPromise;
+  assert.equal(f.received.length, 1);
+});
+
+test('HTTP400 mislabeled JSON exact error recovers after complete body', async t => {
+  const payload = JSON.stringify({ error: { message: known, type: 'invalid_request_error', param: '', code: null } });
+  const f = await fixture(t, (_req, res, number) => {
+    res.writeHead(number === 1 ? 400 : 200, { 'content-type': 'text/event-stream; charset=utf-8' });
+    res.end(number === 1 ? payload : delta);
+  });
+  const result = await request(f.address);
+  assert.equal(result.status, 200);
+  assert.equal(result.body, delta);
+  assert.equal(f.received.length, 2);
+  assert.deepEqual(f.received[0].body, raw);
+  const projected = structuredClone(native);
+  delete projected.input[0].id;
+  delete projected.input[1].id;
+  assert.deepEqual(JSON.parse(f.received[1].body), projected);
+});
+
+for (const [name, chunks] of [
+  ['leading whitespace', [Buffer.from(' \t\r\n' + resourceError + '\n ')]],
+  ['whitespace-only first chunk', [Buffer.from(' \t'), Buffer.from('\r\n'), Buffer.from('{'), Buffer.from(resourceError.slice(1)), Buffer.from(' \n')]],
+  ['UTF8 split inside trace suffix', (() => {
+    const bytes = Buffer.from(JSON.stringify({ error: { message: `${known} [trace_id=模拟]`, type: 'invalid_request_error', code: null } }));
+    const split = bytes.indexOf(Buffer.from('模')) + 1;
+    return [bytes.subarray(0, split), bytes.subarray(split, split + 1), bytes.subarray(split + 1)];
+  })()]
+]) {
+  test(`HTTP400 mislabeled JSON ${name} recovers across chunks`, async t => {
+    let finished = false;
+    const f = await fixture(t, (_req, res, number) => {
+      res.writeHead(number === 1 ? 400 : 200, { 'content-type': 'text/event-stream' });
+      if (number === 2) {
+        assert.equal(finished, true);
+        return res.end(delta);
+      }
+      let index = 0;
+      const send = () => {
+        if (res.destroyed) return;
+        if (index < chunks.length) {
+          res.write(chunks[index++]);
+          setTimeout(send, 3);
+        } else {
+          finished = true;
+          res.end();
+        }
+      };
+      send();
+    });
+    assert.equal((await request(f.address)).body, delta);
+    assert.equal(f.received.length, 2);
+  });
+}
+
+for (const [name, payload] of [
+  ['ordinary error', Buffer.from('{"error":{"message":"invalid schema","type":"invalid_request_error"}}')],
+  ['semantic output', Buffer.from(JSON.stringify({ error: { message: known }, output: [{ type: 'message', content: 'semantic' }] }))],
+  ['unknown envelope field', Buffer.from(JSON.stringify({ error: { message: known }, surprise: 'unknown' }))],
+  ['unknown error field', Buffer.from(JSON.stringify({ error: { message: known, surprise: 'unknown' } }))],
+  ['bare message', Buffer.from(JSON.stringify({ message: known }))],
+  ['array body', Buffer.from(JSON.stringify([{ error: { message: known } }]))],
+  ['bad JSON', Buffer.from('{"error":')],
+  ['trailing invalid bytes', Buffer.concat([Buffer.from(resourceError), Buffer.from(' trailing junk')])],
+  ['trailing second object', Buffer.from(resourceError + '{}')],
+  ['raw sentence', Buffer.from(known)],
+  ['whitespace only', Buffer.from(' \t\r\n')],
+  ['invalid UTF8 inside known error', (() => {
+    const prefix = Buffer.from(`{"error":{"message":"${known} `);
+    return Buffer.concat([prefix, Buffer.from([0xc3, 0x28]), Buffer.from('"}}')]);
+  })()]
+]) {
+  test(`HTTP400 mislabeled JSON ${name} is relayed byte-for-byte without recovery`, async t => {
+    const f = await fixture(t, (_req, res) => {
+      res.writeHead(400, { 'content-type': 'text/event-stream' });
+      res.end(payload);
+    });
+    const result = await request(f.address);
+    assert.equal(result.status, 400);
+    assert.deepEqual(result.bytes, payload);
+    assert.equal(f.received.length, 1);
+  });
+}
+
+for (const status of [200, 401, 429, 500]) {
+  test(`HTTP400 mislabeled JSON compatibility excludes status ${status}`, async t => {
+    const f = await fixture(t, (_req, res) => {
+      res.writeHead(status, { 'content-type': 'text/event-stream' });
+      res.end(resourceError);
+    });
+    const result = await request(f.address);
+    assert.equal(result.status, status);
+    assert.equal(result.body, resourceError);
+    assert.equal(f.received.length, 1);
+  });
+}
+
+for (const endpoint of ['/v1/responses/compact', '/v1/chat/completions', '/v1/messages']) {
+  test(`HTTP400 mislabeled JSON compatibility excludes ${endpoint}`, async t => {
+    const f = await fixture(t, (_req, res) => {
+      res.writeHead(400, { 'content-type': 'text/event-stream' });
+      res.end(resourceError);
+    });
+    const result = await request(f.address, { path: endpoint });
+    assert.equal(result.status, 400);
+    assert.equal(result.body, resourceError);
+    assert.equal(f.received.length, 1);
+  });
+}
+
+for (const contentType of ['text/plain', 'application/octet-stream']) {
+  test(`HTTP400 mislabeled JSON compatibility excludes ${contentType}`, async t => {
+    const f = await fixture(t, (_req, res) => {
+      res.writeHead(400, { 'content-type': contentType });
+      res.end(resourceError);
+    });
+    const result = await request(f.address);
+    assert.equal(result.status, 400);
+    assert.equal(result.body, resourceError);
+    assert.equal(f.received.length, 1);
+  });
+}
+
+for (const [name, payload] of [['JSON exceeds cap', Buffer.from(resourceError)], ['whitespace exceeds cap', Buffer.from(' '.repeat(40) + resourceError)]]) {
+  test(`HTTP400 mislabeled JSON ${name} commits original bytes without recovery`, async t => {
+    const f = await fixture(t, (_req, res) => {
+      res.writeHead(400, { 'content-type': 'text/event-stream' });
+      res.end(payload);
+    }, { bufferLimit: 20 });
+    const result = await request(f.address);
+    assert.equal(result.status, 400);
+    assert.deepEqual(result.bytes, payload);
+    assert.equal(f.received.length, 1);
+  });
+}
+
+test('HTTP400 mislabeled JSON compressed body is not inspected', async t => {
+  const payload = require('node:zlib').gzipSync(resourceError);
+  const f = await fixture(t, (_req, res) => {
+    res.writeHead(400, { 'content-type': 'text/event-stream', 'content-encoding': 'gzip' });
+    res.end(payload);
+  });
+  const result = await request(f.address);
+  assert.equal(result.status, 400);
+  assert.deepEqual(result.bytes, payload);
+  assert.equal(f.received.length, 1);
+});
+
+test('HTTP400 mislabeled JSON waits for normal HTTP EOF before recovery', async t => {
+  const f = await fixture(t, (_req, res) => {
+    res.writeHead(400, { 'content-type': 'text/event-stream', 'content-length': Buffer.byteLength(resourceError) + 10 });
+    res.write(resourceError);
+    setTimeout(() => res.destroy(), 10);
+  });
+  const result = await request(f.address);
+  assert.equal(result.status, 502);
+  assert.equal(f.received.length, 1);
+});
+
+test('HTTP400 mislabeled JSON stalled after complete JSON hits total deadline without retry', async t => {
+  const f = await fixture(t, (_req, res) => {
+    res.writeHead(400, { 'content-type': 'text/event-stream' });
+    res.write(resourceError);
+  }, { timeoutMs: 35 });
+  const result = await request(f.address);
+  assert.equal(result.status, 504);
+  assert.equal(f.received.length, 1);
+});
+
+test('HTTP400 mislabeled JSON second failed response is passed unchanged without a third attempt', async t => {
+  const f = await fixture(t, (_req, res) => {
+    res.writeHead(400, { 'content-type': 'text/event-stream' });
+    res.end(resourceError);
+  });
+  const result = await request(f.address);
+  assert.equal(result.status, 400);
+  assert.equal(result.body, resourceError);
+  assert.equal(f.received.length, 2);
+});
+
+test('HTTP400 mislabeled JSON delayed trailing bad bytes prevents early recovery', async t => {
+  const payload = resourceError + ' trailing junk';
+  const f = await fixture(t, (_req, res) => {
+    res.writeHead(400, { 'content-type': 'text/event-stream' });
+    res.write(resourceError);
+    setTimeout(() => res.end(' trailing junk'), 10);
+  });
+  const result = await request(f.address);
+  assert.equal(result.status, 400);
+  assert.equal(result.body, payload);
+  assert.equal(f.received.length, 1);
+});
+
+test('HTTP400 mislabeled JSON cancellation closes buffered upstream without retry', async t => {
+  let started;
+  let closed;
+  const startedPromise = new Promise(resolve => { started = resolve; });
+  const closedPromise = new Promise(resolve => { closed = resolve; });
+  const f = await fixture(t, (_req, res) => {
+    res.on('close', closed);
+    res.writeHead(400, { 'content-type': 'text/event-stream' });
+    res.write(' \t' + resourceError);
+    started();
+  });
+  const req = http.request({ hostname: '127.0.0.1', port: f.address.port, path: '/v1/responses', method: 'POST', headers: { 'content-type': 'application/json' } });
+  req.on('error', () => {});
+  req.end(raw);
+  await startedPromise;
+  req.destroy();
+  await closedPromise;
+  assert.equal(f.received.length, 1);
+});
+
+test('HTTP400 mislabeled JSON prefix detection preserves true chunked SSE recovery', async t => {
+  const f = await fixture(t, (_req, res, number) => {
+    res.writeHead(number === 1 ? 400 : 200, { 'content-type': 'text/event-stream' });
+    if (number === 2) return res.end(delta);
+    res.write('event:');
+    setTimeout(() => res.end(lifecycle.slice('event:'.length) + failed), 5);
+  });
+  const result = await request(f.address);
+  assert.equal(result.status, 200);
+  assert.equal(result.body, delta);
+  assert.equal(f.received.length, 2);
+});
+
+test('HTTP400 mislabeled JSON unverified message ID still refuses recovery', async t => {
+  const f = await fixture(t, (_req, res) => {
+    res.writeHead(400, { 'content-type': 'text/event-stream' });
+    res.end(resourceError);
+  });
+  const result = await request(f.address, { body: JSON.stringify({ ...native, input: [...native.input, { type: 'message', id: 'msg-mock', content: [] }] }) });
+  assert.equal(result.status, 409);
+  assert.equal(JSON.parse(result.body).error.code, 'unsupported_item_id');
   assert.equal(f.received.length, 1);
 });
 
