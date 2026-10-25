@@ -31,7 +31,7 @@ test('CLI starts via env, relays mock request and SIGTERM closes listener', asyn
   t.after(() => new Promise(resolve => upstream.close(resolve)));
   const port = await unusedPort();
   const child = spawn(process.execPath, [cli], {
-    env: { ...process.env, RHB_UPSTREAM: `http://127.0.0.1:${upstream.address().port}/v1`, RHB_PORT: String(port), RHB_API_KEY: 'MOCK_CLI_KEY' },
+    env: { ...process.env, RHB_UPSTREAM: `http://127.0.0.1:${upstream.address().port}/v1`, RHB_PORT: String(port), RHB_API_KEY: 'MOCK_CLI_KEY', RHB_HISTORY_MODE: 'harness' },
     stdio: ['ignore', 'pipe', 'pipe']
   });
   t.after(() => { if (child.exitCode === null) child.kill('SIGKILL'); });

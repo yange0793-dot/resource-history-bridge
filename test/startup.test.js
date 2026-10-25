@@ -171,7 +171,8 @@ test('launcher runs from another cwd, preserves configured env and forwards loca
   await listenerClosed(port);
 });
 
-test('launcher converts Messages and recovers native Responses resource errors', { timeout: 45000 }, async t => {
+for (const historyMode of ['codex', 'harness']) {
+test(`launcher converts Messages and recovers native Responses resource errors in ${historyMode} mode`, { timeout: 45000 }, async t => {
   const shell = windows ? powershell() : 'bash';
   assert.ok(shell, 'Windows verification requires PowerShell');
   const cwd = await fs.mkdtemp(path.join(os.tmpdir(), 'rhb converted cwd '));
@@ -199,7 +200,7 @@ test('launcher converts Messages and recovers native Responses resource errors',
   const port = await unusedPort();
   const script = path.join(root, 'scripts', windows ? 'start-windows.ps1' : 'start-macos.command');
   const child = spawn(shell, windows ? ['-NoProfile', '-NonInteractive', '-File', script] : [script], {
-    cwd, env: { ...startupEnv(), RHB_UPSTREAM: `http://127.0.0.1:${upstream.address().port}/v1`, RHB_PORT: String(port), RHB_UPSTREAM_PROTOCOL: 'responses', RHB_HISTORY_MODE: 'codex', RHB_RETRY_DELAY_MS: '0', RHB_RESOURCE_ATTEMPTS: '3' },
+    cwd, env: { ...startupEnv(), RHB_UPSTREAM: `http://127.0.0.1:${upstream.address().port}/v1`, RHB_PORT: String(port), RHB_UPSTREAM_PROTOCOL: 'responses', RHB_HISTORY_MODE: historyMode, RHB_RETRY_DELAY_MS: '0', RHB_RESOURCE_ATTEMPTS: '3' },
     stdio: ['ignore', 'pipe', 'pipe']
   });
   const closed = once(child, 'close');
@@ -236,3 +237,4 @@ test('launcher converts Messages and recovers native Responses resource errors',
   await closed;
   await listenerClosed(port);
 });
+}

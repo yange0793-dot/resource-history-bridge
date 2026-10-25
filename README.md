@@ -1,6 +1,6 @@
 # resource-history-bridge
 
-独立运行的本机 API 桥，优先支持 Codex 的 Responses 请求，以及 Claude Code 的 Messages → Responses 转换。可作为 Node.js 纯库使用，不依赖 Mixrouter、模型管理工具、某个 Agent 或第三方 npm 包，不自动修改客户端配置或持久历史。
+独立运行的本机 API 桥，支持 Codex 与 DeepSeek Harness 的原生 Responses 请求，以及 Claude Code 的 Messages → Responses 转换。可作为 Node.js 纯库使用，不依赖 Mixrouter、模型管理工具、某个 Agent 或第三方 npm 包，不自动修改客户端配置或持久历史。
 
 ## Azure 跨资源历史恢复
 
@@ -10,7 +10,7 @@
 
 > The requested item was created under a different Azure OpenAI resource.
 
-原生 Responses 第一次发送原始 JSON 请求字节；默认 `minimal` 模式的恢复请求只删除 `input` 中 `reasoning.id` 和 `function_call.id`。显式 `codex` 模式还允许删除符合完整性校验的 `message.id`。两种模式都保留 `encrypted_content`、工具 `call_id`、名称、参数、工具结果、文本、模型及其他字段，不换上游、模型、密钥或会话身份。
+原生 Responses 第一次发送原始 JSON 请求字节；默认 `minimal` 模式的恢复请求只删除 `input` 中 `reasoning.id` 和 `function_call.id`。显式 `codex` / `harness` 模式还允许删除符合各自完整性校验的 `message.id`。所有模式都保留 `encrypted_content`、工具 `call_id`、名称、参数、工具结果、文本、模型及其他字段，不换上游、模型、密钥或会话身份。
 
 检测 HTTP 400 JSON、提交前已知 SSE 错误，以及 AgentRouter 的一种实测包装：HTTP 400 的响应头为 `text/event-stream`、正文却是完整 JSON。后者必须在有界缓冲中完整、严格解析并正常结束，才参与恢复。
 
@@ -19,6 +19,12 @@
 **证据边界：**一次 AgentRouter 工具续接对照中，移除两类 ID、保留加密 reasoning 和工具配对后返回预期 `RESULT_42`。这不证明所有历史类型可移植。桥仍拒绝带 `previous_response_id`、`conversation`、`item_reference`、非对象历史项、工具缺配对、其他类型顶层 item ID 或没有可投影 ID 的恢复。默认 `minimal` 模式下，普通助手的 `message.id` 也在未支持范围；不根据名字猜测其安全性。
 
 显式设置 `RHB_HISTORY_MODE=codex` 可启用 Codex 实验支持的投影：仅移除 `message`、`reasoning`、`function_call` 三类 item 的 `id`，继续保留 `additional_tools`、`custom_tool_call`、`custom_tool_call_output` 的 `id`，并严格验证完整内联内容、工具 schema 与工具配对。引用历史、不完整项及其他类型的顶层 item ID 仍拒绝。具体接受形状见 [当前范围](docs/scope.md#codex-历史投影契约)。早期外层 capture 实验在注入已知错误后，仅移除 8 个完整 `message.id`，保留其他字段，由真实 API 返回 `RESULT_42`、Codex 退出 0；这验证候选投影与该上游样本兼容，并非当前桥的直接恢复实验。当前桥 `codex` 模式另由真实 Codex CLI 对本机 mock 的故障注入验证工具结果续接，错误与恢复响应均来自 mock。**两项都不是当前实现对自然 Azure 跨资源故障的实跑，也不构成跨资源恢复率证明**；真实 AgentRouter baseline 成功单独记录。
+
+### DeepSeek Harness 原生历史
+
+`RHB_HISTORY_MODE=harness` 专门适配 PiAiAdapter 的 Responses 历史：普通助手文本、encrypted reasoning 和 function 调用/结果可以一同投影；无 ID 的 inline additional_tools 与 custom 调用/结果也可接受。已有 custom/additional ID 保留，工具配对和会话身份不变，不复用要求这几类 ID 必填的 Codex 契约。
+
+Harness 的 provider 保持原 ID、模型和密钥来源，仅在用户启用时将 `baseURL` 指向 `http://127.0.0.1:8790/v1`，协议为 `openai-responses`；使用 `compat.supportsStrictMode: true` 让工具请求显式发送 `strict: false`、保留可选参数。桥不接管 Harness 原生配置，也不修改持久 replayState。详细接入见 [Harness 说明](docs/clients.md#deepseek-harness)。
 
 ### 空响应保持上游行为
 
@@ -61,7 +67,7 @@ node cli.js
 - 继续使用原模型和密钥。模型从客户端请求中读取，不设置隐藏槽位。
 - SDK 如果自动补 `/v1`，使用根地址，避免重复。
 
-可使用 `scripts/start-macos.command` 或 `scripts/start-windows.ps1`；脚本不保存密钥、不自动修改配置、不安装后台服务。详细接入见 [客户端说明](docs/clients.md)。Windows 脚本已在真实 Windows runner 上执行，包含启动、HTTP 转发/转换/恢复与进程树停止后的端口关闭；见下方验证记录。
+可使用 `scripts/start-macos.command` 或 `scripts/start-windows.ps1`；脚本不保存密钥、不自动修改配置、不安装后台服务。详细接入见 [客户端说明](docs/clients.md)。此前资源恢复修订的 Windows 脚本已在真实 Windows runner 上执行，包含启动、HTTP 转发/转换/恢复与进程树停止后的端口关闭；当前 Harness 修订的 Windows CI 尚未执行，见下方验证记录。
 
 按 `Ctrl+C` 停止。CLI 不接受 argv 或密钥参数。
 
@@ -70,7 +76,7 @@ node cli.js
 | `RHB_UPSTREAM` | 必填 | 固定上游 API Base URL，生产建议 HTTPS |
 | `RHB_UPSTREAM_PROTOCOL` | `passthrough` | `responses` 开启 Messages → Responses；否则原协议转发 |
 | `RHB_REASONING_SHAPE` | `summary` | 转换时的 reasoning 形状，`summary` / `content` |
-| `RHB_HISTORY_MODE` | `minimal` | `codex` 仅投影已校验的 message/reasoning/function_call ID；保留 additional_tools/custom ID |
+| `RHB_HISTORY_MODE` | `minimal` | `codex` / `harness` 投影已校验的 message/reasoning/function_call ID；`harness` 另接受 PiAiAdapter 无 ID 的 inline/custom 形状；保留 additional_tools/custom ID |
 | `RHB_API_KEY` | 未设置 | 默认透传客户端认证；设置则覆盖上游认证 |
 | `RHB_KEY_HEADER` | `authorization` | `authorization` / `api-key` / `x-api-key` |
 | `RHB_USER_AGENT` | 未设置 | 仅显式设置时覆盖出站 User-Agent；默认保留客户端值 |
@@ -119,6 +125,8 @@ node --test
 
 单测使用 loopback mock，不需要真实密钥。测试覆盖历史不可变、配对、身份保留、JSON/SSE 错误包装、资源恢复提交边界、空响应不重试、终态独有载荷、取消、超时、转换和 CLI。
 
+DeepSeek Harness 另提供 `node scripts/verify-harness.mjs`，直接使用本机安装版 PiAiAdapter 的公开原生 API 发请求，经桥连接 loopback mock。PiAiAdapter 0.2.1-rc.1 / pi-ai 1.1.0 在 Node.js 24.18.0 上完成 **90 项检查、14 次请求、0 失败**；两次只读算术工具实际执行，最终得到 `RESULT_42`。验证原生 replayState/签名、encrypted reasoning 与 backfill、call_id、strict:false 和 headers 保留，第一次请求字节不变；只在已知未输出资源错误后移除 message/reasoning/function_call ID，重复同类错误重发同一投影。它不读取用户 profile/密钥、不修改 Harness 安装文件；没有安装依赖就明确失败，不将未运行伪记为通过。安装版与源码哈希记录在 [Harness 验证](docs/verification-harness-20261025.json)。这是安装版 adapter 对 mock 的验证，不是完整 Harness GUI 或真实 AgentRouter 实跑；Harness 原生空响应策略保持不动，普通跨平台单测不依赖安装 Harness。
+
 真实客户端实验与 mock 测试是不同证据。本轮 macOS 实际 CLI 结果：
 
 - Claude Code → 桥 → AgentRouter：纯文本返回 `CLAUDE_BRIDGE_OK`，Read 工具调用及结果续接返回 `RESULT_42`。
@@ -129,6 +137,6 @@ node --test
 - 当前修订的原生 Responses 两工具实验：保留 encrypted reasoning、两组 function call/result 与 caller 原 prompt cache key，续接处注入资源错误后桥投影，真实 API 返回 `RESULT_42`。这是小型 API 对照，不是 Codex 的长混合 CLI 历史；后者此前仍有真实资源错误/限流/无细节 invalid_request_error，不能冒称全量恢复。
 - 旧版的空响应恢复实验不作为当前功能：2026-10-25 按用户要求移除空响应重试和额外空输出错误；旧验证记录仅保留为历史，不能代替本次验证。
 
-当前修订已完成真实 [CI 矩阵](https://github.com/yange0793-dot/resource-history-bridge/actions/runs/40151876122)：Ubuntu/macOS/Windows × Node.js 18/22/24 九个组合均 **381/381 通过，0 fail/skip**。Windows 两个启动测试实际运行 `.ps1`，验证不同工作目录、普通转发、Messages 转换、资源错误投影恢复、进程树停止和端口关闭；并非仅解析脚本。初轮 Windows 启动环境缺失导致超时，补齐系统环境并使用可用的 PowerShell 后重跑通过；旧失败记录保留。
+此前资源恢复修订的最新真实 [CI 矩阵 40153989577](https://github.com/yange0793-dot/resource-history-bridge/actions/runs/40153989577)：Ubuntu/macOS/Windows × Node.js 18/22/24 九个组合均 **382/382 通过，0 fail/skip**。Windows 两个启动测试实际运行 `.ps1`，验证不同工作目录、普通转发、Messages 转换、资源错误投影恢复、进程树停止和端口关闭；并非仅解析脚本。初轮 Windows 启动环境缺失导致超时，补齐系统环境并使用可用的 PowerShell 后重跑通过；旧失败记录及此前 [CI 40151876122](https://github.com/yange0793-dot/resource-history-bridge/actions/runs/40151876122) 的 381/381 结果保留。完整结果见 [资源恢复验证](docs/verification-resource-only-20261025.json)。
 
-新增混合加密工具历史回归后，本机 macOS 的 Node.js 18.20.8、22.23.3、24.18.0 各 382/382；上述 CI 记录为新增用例前的 381/381。完整结果见 [本轮验证](docs/verification-resource-only-20261025.json)。旧版 366/366 和空响应策略仅在 [历史验证](docs/verification-20261025.json) 中存档，不代表当前功能。Windows 与 Mac 复用同一恢复核心，平台差异只在启动、环境与进程退出；上述 Windows 实跑完成本轮适配验证，不要求再现偶发 Azure 故障。CI 使用 mock 上游，未运行 Windows 实际 Claude Code/Codex 对真实 AgentRouter；不承诺全部供应商、历史类型、管理工具或长期并发。
+当前 Harness 修订在本机 macOS Node.js 18.20.8、22.23.3、24.18.0 全量各 **410/410，0 fail/skip**，见 [Harness 验证](docs/verification-harness-20261025.json)。该修订尚未推送或运行 Windows CI；虽已新增 Windows 启动入口的 Harness 模式测试，不把测试存在记为 Windows 执行通过，也不以此前 CI 代替当前代码的平台验证。旧版 366/366 和空响应策略仅在 [历史验证](docs/verification-20261025.json) 中存档，不代表当前功能。Windows 与 Mac 复用同一恢复核心，但平台适配与联网客户端证据分别记录。CI 使用 mock 上游，未运行 Windows 实际 Claude Code/Codex 对真实 AgentRouter；不承诺全部供应商、历史类型、管理工具或长期并发。

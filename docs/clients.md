@@ -14,7 +14,7 @@ bash "/完整路径/resource-history-bridge/scripts/start-macos.command"
 
 脚本根据自身位置查找 `cli.js`，不要求当前目录是仓库。已有环境变量优先；没有 `RHB_UPSTREAM` 时询问真实上游 API Base URL；没有 `RHB_UPSTREAM_PROTOCOL` 时询问 `responses` / `passthrough`，留空默认 `responses`。`responses` 把客户端的 Messages 请求转换为上游 Responses 请求；`passthrough` 不转换。Codex 原生 Responses 请求不需要 Messages 转换。
 
-当前本机 macOS 三个 Node 版本全量各 382/382 通过；启动验证包含不同工作目录、loopback HTTP 转发/转换/恢复、停止和 listener 关闭。Ubuntu/macOS/Windows CI 九个组合也全部通过，见 [本轮验证](verification-resource-only-20261025.json)。旧版 366/366 只保留为历史。
+当前 Harness 修订在本机 macOS 的 Node.js 18.20.8、22.23.3、24.18.0 全量各 410/410、0 fail/skip；见 [Harness 验证](verification-harness-20261025.json)。此前资源恢复修订的 Ubuntu/macOS/Windows CI 九个组合各 382/382，见 [资源恢复验证](verification-resource-only-20261025.json)，不代替当前 Harness 修订的平台验证。启动验证包含不同工作目录、loopback HTTP 转发/转换/恢复、停止和 listener 关闭；旧版 366/366 只保留为历史。
 
 ### Windows PowerShell
 
@@ -26,7 +26,7 @@ bash "/完整路径/resource-history-bridge/scripts/start-macos.command"
 
 脚本通过 `$PSScriptRoot` 定位仓库父目录，并用 `Get-Command node` 查找 Node.js。上游地址、协议选择与 macOS 相同。脚本不修改 ExecutionPolicy；如果当前策略禁止运行脚本，请遵循本机管理员的策略，或使用 Node.js 直接启动 `cli.js`。
 
-Windows 脚本已在真实 Windows runner 的 Node.js 18/22/24 下运行，全量各 381/381、0 fail/skip；PowerShell 7 与系统 Windows PowerShell 5.1 均实际运行启动测试通过。测试实际启动 `.ps1`、进行 HTTP 转发与 Messages 转换、注入资源错误后恢复、关闭启动进程树并验证端口不再监听；不是仅做语法解析。详见 [CI](https://github.com/yange0793-dot/resource-history-bridge/actions/runs/40151876122)。CI 使用 mock 上游，未运行 Windows 实际 Claude Code/Codex 对真实 AgentRouter。Windows 与 Mac 共用恢复核心；适配完成不以再次复现偶发上游错误为前提。
+此前资源恢复修订的 Windows 脚本已在真实 Windows runner 的 Node.js 18/22/24 下运行，全量各 382/382、0 fail/skip；PowerShell 7 与系统 Windows PowerShell 5.1 均实际运行启动测试通过。测试实际启动 `.ps1`、进行 HTTP 转发与 Messages 转换、注入资源错误后恢复、关闭启动进程树并验证端口不再监听；不是仅做语法解析。最新已完成 [CI 40153989577](https://github.com/yange0793-dot/resource-history-bridge/actions/runs/40153989577) 的九个组合均为 382/382；此前 [CI 40151876122](https://github.com/yange0793-dot/resource-history-bridge/actions/runs/40151876122) 的 381/381 保留为历史。两轮 CI 使用 mock 上游，未运行 Windows 实际 Claude Code/Codex 对真实 AgentRouter。当前 Harness 修订尚未推送或运行 Windows CI；虽已新增 Windows 启动入口的 Harness 模式测试，不将测试存在记为 Windows 执行通过。Windows 与 Mac 共用恢复核心，但此前平台适配证据不代替新增 Harness 修订的验证。
 
 ### 环境与密钥
 
@@ -93,6 +93,44 @@ $env:ANTHROPIC_BASE_URL = 'http://127.0.0.1:8790'
 保留原模型及现有 `ANTHROPIC_API_KEY` / `ANTHROPIC_AUTH_TOKEN` 来源，不复制或重写密钥。如果已有配置管理工具提供 Base URL，请修改那个来源，避免终端与配置文件两处值冲突。
 
 当上游是 Responses 服务时，桥启动环境必须设置 `RHB_UPSTREAM_PROTOCOL=responses`；上述启动脚本默认选择这个模式。它负责 Messages 与 Responses 转换，不能把 Responses-only 上游当成原生 Messages 服务使用。若上游本身原生支持 Messages，则可选择 `passthrough`。
+
+## DeepSeek Harness
+
+Harness 使用 `openai-responses` 的 PiAiAdapter 路由不需要 Messages 转换。原生 DeepSeek API / `openai-completions` 路由并不是 Responses：本桥只透传它们，不能用 Responses 历史恢复修复所有渠道错误。先在启动桥的环境中选择 `RHB_HISTORY_MODE=harness`；保留默认 `passthrough` 即可：
+
+```sh
+RHB_UPSTREAM=https://api.example.com/v1 \
+RHB_UPSTREAM_PROTOCOL=passthrough \
+RHB_HISTORY_MODE=harness \
+node cli.js
+```
+
+Windows 使用相同环境变量与 `scripts/start-windows.ps1`。上游填写当前渠道真实 Base URL，`api.example.com` 仅为占位符。
+
+适配不需要修补 Harness 安装文件或重现偶发 Azure 错误。验证脚本 `node scripts/verify-harness.mjs` 使用安装版 PiAiAdapter 的公开原生 API 对本机 loopback mock 上游；PiAiAdapter 0.2.1-rc.1 / pi-ai 1.1.0 在 Node.js 24.18.0 完成 90 项检查、14 次请求、0 失败，两次只读算术工具实际执行，最终返回 `RESULT_42`。检查原生 replayState/签名、encrypted reasoning 与 backfill、call_id、strict:false 和 headers 保留，首请求字节不变，以及资源错误后同一投影的重复重发。详见 [Harness 验证](verification-harness-20261025.json)。这不是完整 Harness GUI 或真实 AgentRouter 实跑。需 Node.js 满足安装版 PiAiAdapter 要求（当前为 ≥22.19）；可用 `RHB_HARNESS_MODULES` 指定其 `dsh/node_modules` 路径。脚本不读取用户 profile 或密钥，也不调用真实渠道；普通桥本身仍只要求 Node.js ≥18。
+
+Harness 当前 provider 的 **Base URL** 填 `http://127.0.0.1:8790/v1`，协议选 **`openai-responses`**；保留原 provider ID、模型 ID 和已有密钥来源，避免换 provider 导致客户端将历史当成跨渠道重放。桥不替换模型，不扫描或托管 Harness 配置。
+
+原生 `llm-pi-ai` 的对应字段示例（只展示待设置的字段，不是整份配置）：
+
+```yaml
+- id: llm-pi-ai
+  config:
+    providers:
+      ag:  # 示例：保留已有 provider ID
+        api: openai-responses
+        baseURL: http://127.0.0.1:8790/v1
+        compat:
+          supportsStrictMode: true
+```
+
+`supportsStrictMode: true` 表示 PiAiAdapter 可以发显式 `strict: false`，并非开启严格工具模式；不填时某些 Responses 上游会默认严格化工具 schema，使本应可选的子代理参数变为必填。合并到现有 provider，不删除已有 models、headers、apiKeyEnv 或其他 compat 字段；不要整体替换 `config`，也不要写 `config: !!js`。
+
+`harness` 模式接受安装版 PiAiAdapter 的普通助手文本 ID、encrypted reasoning、function call/result，以及没有 item ID 的 custom 调用/结果和 inline additional_tools。恢复只移除已校验的 message/reasoning/function_call 顶层 ID；保留加密材料、call_id、工具参数、结果和已有 custom/additional ID。第一次请求原字节转发，不修改 Harness 持久会话或 replayState。具体规则见 [Harness 契约](scope.md#harness-历史投影契约)。
+
+安装版 Harness 自己会把合法空 completed 映射为 `EMPTY_RESPONSE`；桥仍原样转发这类完成，不新增空响应检测或修改 Harness 的原生策略。
+
+模型选择或子代理候选池接入，不等于已经具备 Azure item 历史恢复。恢复桥应放在实际 Responses 请求链上；不把它插在 Chat Completions 路径上并期待修复 Responses 错误。本文不自动修改用户现有配置或重启服务。
 
 ## CCSwitch / Magpie 与其他配置管理工具
 
