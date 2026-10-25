@@ -63,11 +63,12 @@ function 与 custom 调用都要求唯一的非空 `call_id`、非空名称和�
 - macOS 上真实 Codex 经桥连接 AgentRouter，baseline 纯文本及工具调用/结果续接成功。
 - 早期 Codex 外层 capture 候选实验：注入已知资源错误并得到 baseline 409 后，由**实验外层**仅移除 8 个完整 `message.id`；additional_tools/custom ID、call_id 配对和其他字段保留。真实 API 的投影请求返回 `RESULT_42`，Codex 退出 0。该实验的真实 API 请求共 6 次、状态均为 200，注入错误不来自真实上游；这是候选投影兼容证据，不是当前桥的直接恢复实跑。
 - 当前桥 `codex` 模式由真实 Codex CLI 对本机 mock 的资源错误注入完成工具结果续接，属于 CLI 兼容与投影机制证据；错误与恢复响应均来自 mock。该项、早期外层实验和真实 AgentRouter baseline 分别记录，不能互相替代；均不证明当前实现对自然 Azure 跨资源故障已实跑，也不构成跨资源恢复率。
-- 当前修订桥对真实 AgentRouter 的 Codex 注入实验成功：工具实际执行输出 `42`；续接处本机注入资源错误后，桥删除 7 个约定 message ID，保留 custom/additional ID、call_id 和其余字段；真实恢复请求得到 completed、`RESULT_42` 与 Codex 退出 0。共 2 次真实 API、1 次本机错误注入。之前限流失败仍保留，不把本次受控成功当作自然故障或恢复率。
-- 两工具真实续接实验暴露过投影后的自然 Azure 资源错误（已含 encrypted reasoning）；旧版只试一次因此失败。当前加入仅针对已知资源错误的有界同字节重发，不删除 encrypted_content；该更复杂真实场景须另行验证，不能用上一条单工具成功代替。
+- 加入连续资源重试前的资源恢复修订对真实 AgentRouter 的 Codex 注入实验成功（历史投影函数与当前版本相同）：工具实际执行输出 `42`；续接处本机注入资源错误后，桥删除 7 个约定 message ID，保留 custom/additional ID、call_id 和其余字段；真实恢复请求得到 completed、`RESULT_42` 与 Codex 退出 0。共 2 次真实 API、1 次本机错误注入。之前限流失败仍保留，不把本次受控成功当作自然故障或恢复率。
+- 两工具真实续接实验暴露过投影后的自然 Azure 资源错误（已含 encrypted reasoning）；旧版只试一次因此失败。当前加入仅针对已知资源错误的有界同字节重发，不删除 encrypted_content。更小的两工具 Responses 原生 API 对照已保留加密 reasoning 并恢复得到 RESULT_42；Codex 长混合历史仍曾被限流/无细节 invalid_request_error 阻断，不能把 API 对照当成该 CLI 场景通过。
 - 旧版空响应恢复实验仅留在历史记录中：2026-10-25 用户取消这项功能，当前版本不重试空响应，也不生成空输出错误。不得将旧实验写成当前版本行为。
-- 旧版包含空响应重试/422 的 macOS 三版本 366/366 记录保存在 [历史验证](verification-20261025.json)。该功能已撤销，旧记录不代替当前修订验证。当前代码须重新运行本轮全量和 Windows runner，并独立记录。
-- Windows/PowerShell 与 Linux 尚未实跑；Ubuntu/macOS/Windows × Node.js 18/22/24 的 CI 矩阵已提供但尚未上传执行。脚本、矩阵存在不等于平台通过；macOS 结果不代替其他平台。
+- 旧版包含空响应重试/422 的 macOS 三版本 366/366 记录保存在 [历史验证](verification-20261025.json)。该功能已撤销，旧记录不代替当前修订验证。当前修订已另行完成全量与 Windows runner，并独立记录。
+- 真实 [CI 40151876122](https://github.com/yange0793-dot/resource-history-bridge/actions/runs/40151876122) 在 Ubuntu/macOS/Windows × Node.js 18/22/24 九个组合全部 381/381、0 fail/skip；已下载并核对每份 TAP。Windows 实际启动 PowerShell 脚本、进行 HTTP 转换与恢复、停止进程树并检查端口关闭，不只是语法解析。首轮 Windows 启动超时修复后重跑通过。新增混合加密工具历史回归后，本机 macOS 三版本各 382/382；该 CI 为新增用例前的 381/381。
+- Windows 与 Mac 共用恢复核心；Windows 启动、环境、HTTP 接线及进程退出实跑通过，本轮适配完成，不以再次复现偶发资源错误为前提。Windows CI 上游为 mock，未运行 Windows 实际 Claude Code/Codex 对真实 AgentRouter；如实区分平台适配与联网客户端证据，详见 [本轮验证](verification-resource-only-20261025.json)。
 - 配置管理工具仅提供 endpoint 接入说明，未实测所有工具或版本，不承诺所有供应商、历史形状、长混合历史或长期并发。
 
 2026-10-25 用户授权将本轮修订提交、推送到独立测试分支并运行 Windows CI；未授权合入 main、发布版本或替换用户运行配置。

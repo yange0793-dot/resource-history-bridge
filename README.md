@@ -61,7 +61,7 @@ node cli.js
 - 继续使用原模型和密钥。模型从客户端请求中读取，不设置隐藏槽位。
 - SDK 如果自动补 `/v1`，使用根地址，避免重复。
 
-可使用 `scripts/start-macos.command` 或 `scripts/start-windows.ps1`；脚本不保存密钥、不自动修改配置、不安装后台服务。详细接入见 [客户端说明](docs/clients.md)。Windows 脚本已提供，但没有在 Windows/PowerShell 中实跑；不能用 macOS 测试替代。
+可使用 `scripts/start-macos.command` 或 `scripts/start-windows.ps1`；脚本不保存密钥、不自动修改配置、不安装后台服务。详细接入见 [客户端说明](docs/clients.md)。Windows 脚本已在真实 Windows runner 上执行，包含启动、HTTP 转发/转换/恢复与进程树停止后的端口关闭；见下方验证记录。
 
 按 `Ctrl+C` 停止。CLI 不接受 argv 或密钥参数。
 
@@ -125,9 +125,10 @@ node --test
 - Codex → 桥 → AgentRouter：未注入故障的 baseline 纯文本及工具调用/结果续接成功。
 - 早期 Codex 外层 capture 实验：注入已知资源错误后，实验层仅移除 8 个完整 `message.id`，保留 additional_tools/custom ID、call_id 配对与其他字段；真实 API 的投影请求返回 `RESULT_42`、Codex 退出 0。这是候选投影与真实上游样本兼容证据，不是当前桥的直接恢复验证。
 - 真实 Codex CLI → 当前桥 `codex` 模式 → 本机 mock：资源错误注入后完成工具结果续接，属于 CLI 兼容与投影机制证据。mock 同时提供错误和恢复响应，不是真实 AgentRouter 恢复。两项都不是当前实现对自然 Azure 跨资源故障的实跑，不能据此推算跨资源恢复率。
-- 当前修订桥 → 真实 AgentRouter 的 Codex 注入实验已成功：工具实际执行并得到 `42`；本机注入资源错误后，桥仅删除 7 个约定 `message.id`、保留 custom/additional ID、call_id 和其余字段；真实恢复请求返回非空 completed 与 `RESULT_42`，Codex 退出 0。共 2 次真实 API 请求、1 次本机错误注入。之前被 eastus2 限流挡住的失败记录保留；本次成功仍不等于自然 Azure 故障恢复率。
+- 加入连续资源重试前的资源恢复修订 → 真实 AgentRouter 的 Codex 注入实验已成功（历史投影函数与当前版本相同）：工具实际执行并得到 `42`；本机注入资源错误后，桥仅删除 7 个约定 `message.id`、保留 custom/additional ID、call_id 和其余字段；真实恢复请求返回非空 completed 与 `RESULT_42`，Codex 退出 0。共 2 次真实 API 请求、1 次本机错误注入。之前被 eastus2 限流挡住的失败记录保留；本次成功仍不等于自然 Azure 故障恢复率。
+- 当前修订的原生 Responses 两工具实验：保留 encrypted reasoning、两组 function call/result 与 caller 原 prompt cache key，续接处注入资源错误后桥投影，真实 API 返回 `RESULT_42`。这是小型 API 对照，不是 Codex 的长混合 CLI 历史；后者此前仍有真实资源错误/限流/无细节 invalid_request_error，不能冒称全量恢复。
 - 旧版的空响应恢复实验不作为当前功能：2026-10-25 按用户要求移除空响应重试和额外空输出错误；旧验证记录仅保留为历史，不能代替本次验证。
 
-旧版三版本 366/366 的记录保存在 [历史验证](docs/verification-20261025.json)，其中空响应恢复功能已撤销，不代表当前代码。当前修订的全量、真实上游和 Windows runner 结果将在本轮验证后单独记录；不以旧版结果代替。
+当前修订已完成真实 [CI 矩阵](https://github.com/yange0793-dot/resource-history-bridge/actions/runs/40151876122)：Ubuntu/macOS/Windows × Node.js 18/22/24 九个组合均 **381/381 通过，0 fail/skip**。Windows 两个启动测试实际运行 `.ps1`，验证不同工作目录、普通转发、Messages 转换、资源错误投影恢复、进程树停止和端口关闭；并非仅解析脚本。初轮 Windows 启动环境缺失导致超时，补齐系统环境并使用可用的 PowerShell 后重跑通过；旧失败记录保留。
 
-`.github/workflows/test.yml` 已提供 Ubuntu/macOS/Windows × Node.js 18/22/24 矩阵，包含启动脚本语法检查与 `node --test`；矩阵尚未上传执行，Windows/PowerShell 和 Linux 尚未实跑。macOS 上的版本通过不代替其他平台验证，以上结果也不承诺全部供应商、历史类型、配置管理工具或长期并发。
+新增混合加密工具历史回归后，本机 macOS 的 Node.js 18.20.8、22.23.3、24.18.0 各 382/382；上述 CI 记录为新增用例前的 381/381。完整结果见 [本轮验证](docs/verification-resource-only-20261025.json)。旧版 366/366 和空响应策略仅在 [历史验证](docs/verification-20261025.json) 中存档，不代表当前功能。Windows 与 Mac 复用同一恢复核心，平台差异只在启动、环境与进程退出；上述 Windows 实跑完成本轮适配验证，不要求再现偶发 Azure 故障。CI 使用 mock 上游，未运行 Windows 实际 Claude Code/Codex 对真实 AgentRouter；不承诺全部供应商、历史类型、管理工具或长期并发。

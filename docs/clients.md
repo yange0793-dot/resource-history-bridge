@@ -14,7 +14,7 @@ bash "/完整路径/resource-history-bridge/scripts/start-macos.command"
 
 脚本根据自身位置查找 `cli.js`，不要求当前目录是仓库。已有环境变量优先；没有 `RHB_UPSTREAM` 时询问真实上游 API Base URL；没有 `RHB_UPSTREAM_PROTOCOL` 时询问 `responses` / `passthrough`，留空默认 `responses`。`responses` 把客户端的 Messages 请求转换为上游 Responses 请求；`passthrough` 不转换。Codex 原生 Responses 请求不需要 Messages 转换。
 
-启动脚本验证包括真实启动、loopback HTTP POST、停止及 listener 关闭。旧版三版本 366/366 的结果仅存档；空响应功能撤销后重新验证当前代码，不以旧版或 macOS 的结果宣称 Windows 通过。
+当前本机 macOS 三个 Node 版本全量各 382/382 通过；启动验证包含不同工作目录、loopback HTTP 转发/转换/恢复、停止和 listener 关闭。Ubuntu/macOS/Windows CI 九个组合也全部通过，见 [本轮验证](verification-resource-only-20261025.json)。旧版 366/366 只保留为历史。
 
 ### Windows PowerShell
 
@@ -26,7 +26,7 @@ bash "/完整路径/resource-history-bridge/scripts/start-macos.command"
 
 脚本通过 `$PSScriptRoot` 定位仓库父目录，并用 `Get-Command node` 查找 Node.js。上游地址、协议选择与 macOS 相同。脚本不修改 ExecutionPolicy；如果当前策略禁止运行脚本，请遵循本机管理员的策略，或使用 Node.js 直接启动 `cli.js`。
 
-Windows 脚本尚未在 Windows 或 PowerShell 中实跑，不宣称兼容测试通过。仓库已提供 Ubuntu/macOS/Windows × Node.js 18/22/24 的 CI 矩阵及 PowerShell 语法解析步骤，但矩阵尚未执行。
+Windows 脚本已在真实 Windows runner 的 Node.js 18/22/24 下运行，全量各 381/381、0 fail/skip；PowerShell 7 与系统 Windows PowerShell 5.1 均实际运行启动测试通过。测试实际启动 `.ps1`、进行 HTTP 转发与 Messages 转换、注入资源错误后恢复、关闭启动进程树并验证端口不再监听；不是仅做语法解析。详见 [CI](https://github.com/yange0793-dot/resource-history-bridge/actions/runs/40151876122)。CI 使用 mock 上游，未运行 Windows 实际 Claude Code/Codex 对真实 AgentRouter。Windows 与 Mac 共用恢复核心；适配完成不以再次复现偶发上游错误为前提。
 
 ### 环境与密钥
 

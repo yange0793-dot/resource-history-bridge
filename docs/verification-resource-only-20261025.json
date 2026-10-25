@@ -1,0 +1,60 @@
+{
+  "date": "2026-10-25",
+  "branch": "test/windows-claude-codex-20261025",
+  "verifiedCodeCommit": "0858fe7ef5e3092818e49b3f4398e9e8714dbb0c",
+  "scope": "Responses resource-history recovery and Messages conversion. Empty-response retries and additional empty-output errors are removed.",
+  "windowsAdaptation": { "completed": true, "sharedRuntime": "Windows uses the same Node.js recovery and conversion core verified on macOS.", "platformWork": "PowerShell launch, environment forwarding, HTTP forwarding/conversion/recovery and process-tree termination verified on real Windows runners with PowerShell 7 and 5.1.", "acceptance": "User clarified on 2026-10-25 that reproducing the intermittent upstream fault on Windows is not required to complete adaptation.", "liveFaultReproductionRequired": false },
+  "additionalExperimentsStopped": "Stopped optional live-fault reproduction and extra installed-client CI work when the user clarified the Windows adaptation scope. No extra client job is shipped.",
+  "runtimeHashes": {
+    "cli.js": "c6760c9e82884d35f7ecb324625649a2fdc2104f4297b93c02fdca3ce1538270",
+    "lib/bridge.js": "619d9a34f1887be7766302fe14041dad6ef9230360d7dd68b923239e24406617",
+    "lib/history.js": "c2cb85a42b5cef9837908ddbd893c20d8e898339a7e8384a989a888d97babe31",
+    "lib/messages.js": "639e78c458fc74129c3a6b4b3a0bc3a28beafc6326a8e936edfd4985a000e32b",
+    "lib/output.js": "0cf3eb3e573f9d60686ebd148c16c93faba2bf19064a9e3461e1e7176b97041e"
+  },
+  "behavior": {
+    "emptyOutput": "Native responses are relayed unchanged; valid converted empty completions finish normally, without empty-output retries or additional 422/502 errors.",
+    "resourceRetries": "Project once on the specific pre-output Azure resource error; replay the identical projected bytes for subsequent matching errors. Default 10 total upstream attempts with 1000ms delay, within the original request deadline and cancellation signal.",
+    "lastAttempt": "Returns the actual upstream error rather than a synthetic recovery-exhausted status.",
+    "preserved": ["encrypted_content", "call_id", "tool input/output", "custom/additional item IDs", "model", "credentials", "session identity"],
+    "otherErrors": "No generic replay of rate limits, authentication errors, unrelated 400s, output already delivered, unknown contents, or empty completions."
+  },
+  "localMacOS": [
+    { "node": "18.20.8", "tests": 382, "pass": 382, "fail": 0, "skip": 0 },
+    { "node": "22.23.3", "tests": 382, "pass": 382, "fail": 0, "skip": 0 },
+    { "node": "24.18.0", "tests": 382, "pass": 382, "fail": 0, "skip": 0 }
+  ],
+  "latestRegressionAddition": "Mixed Codex custom-tool plus encrypted-reasoning history retains IDs, content and pairings across repeated known resource errors. Runtime hashes unchanged; previous CI suite had 381 tests.",
+  "ci": {
+    "runId": 40151876122,
+    "url": "https://github.com/yange0793-dot/resource-history-bridge/actions/runs/40151876122",
+    "conclusion": "success",
+    "matrix": "Ubuntu/macOS/Windows x Node 18/22/24: all 9 jobs successful; 381 tests, 381 passed, no failures or skips per job.",
+    "windowsLauncher": "Actual .ps1 execution, different working directory, HTTP passthrough, Messages conversion, resource recovery, process-tree termination and closed-listener checks.",
+    "windowsPowerShell": "PowerShell 7 in full suites; additional startup suites explicitly run under Windows PowerShell 5.1, successful on Node 18/22/24.",
+    "earlierGreenRun": 40151507369,
+    "initialRun": { "runId": 40151118910, "conclusion": "cancelled after startup test failures", "failure": "Both Windows startup tests timed out; missing shell environment caused unready launch and process hold. Repaired environment and preferred PowerShell engine, then reran successfully." }
+  },
+  "realUpstream": {
+    "claudeReadContinuation": { "passed": true, "client": "Claude Code 2.1.310 on macOS", "bridgeHash": "619d9a34f1887be7766302fe14041dad6ef9230360d7dd68b923239e24406617", "turns": 2, "answer": "RESULT_42", "exit": 0, "evidence": "rhb-claude-resource-only-U2nOs3/summary.json" },
+    "codexSingleToolInjectedRecovery": { "passed": true, "client": "Codex 0.162.1 on macOS", "bridgeHash": "4af2ca37d4e01a3561effd3865a980752f0735f3ef03407c43c2c7de02617463", "actualApiRequests": 2, "injectedFaultRequests": 1, "removedMessageIds": 7, "projectionMatches": true, "toolOutput": "42", "answer": "RESULT_42", "exit": 0, "boundary": "Earlier resource-only revision, before repeated-resource retry addition; exact history projection function unchanged. Fault was local injection, recovery response real AgentRouter.", "evidence": "rhb-codex-final-live-GhWa29/summary.json" },
+    "encryptedTwoToolResponses": { "passed": true, "client": "Node Responses API against real AgentRouter", "bridgeHash": "619d9a34f1887be7766302fe14041dad6ef9230360d7dd68b923239e24406617", "actualApiRequests": 3, "injectedFaultRequests": 1, "toolResults": [42, 42], "encryptedHistoryItemsPreserved": 1, "projectionMatches": true, "answer": "RESULT_42", "boundary": "Compact inline history and explicit caller-provided prompt cache key; not actual Codex CLI and not a natural upstream fault.", "evidence": "rhb-encrypted-small-DjJnOn/summary.json" },
+    "codexMultitoolEarlierFailures": { "passed": false, "naturalResourceErrorObservedAfterProjection": true, "encryptedHistoryPresent": true, "evidence": "rhb-codex-multitool-live-N61giq/summary.json", "boundary": "Earlier single-retry revision failed; later actual CLI attempts also hit upstream rate limits or generic invalid_request_error. Do not treat these as completed recovery." },
+    "codexRepeatedResourceReplay": { "passed": false, "bridgeHash": "619d9a34f1887be7766302fe14041dad6ef9230360d7dd68b923239e24406617", "actualApiRequests": 7, "projectedRequestBytesIdentical": true, "encryptedHistoryItemsPreserved": 1, "sessionHeadersPreserved": true, "toolCommandExits": [0, 0], "secondToolOutput": "42", "lastError": "Upstream rejected the request as invalid without resource-error detail.", "evidence": "rhb-codex-multitool-live-ktiAj9/summary.json", "boundary": "Repeated recognized resource failures were retried as designed, but generic final 400 was not retried or misreported as success." },
+    "codexCustomIdCandidateInitial": { "passed": false, "candidateReachedUpstream": false, "actualApiRequests": 2, "injectedFaultRequests": 0, "toolCommandExits": [0], "lastError": "eastus2 token rate limit", "evidence": "rhb-codex-multitool-live-Tp1MGA/summary.json", "boundary": "Rate-limited before the second tool result and fault injection; provides no evidence for or against removing custom item IDs. Runtime field contract unchanged." },
+    "codexCustomIdCandidateSpaced": { "passed": true, "client": "Codex 0.162.1 on macOS", "bridgeHash": "619d9a34f1887be7766302fe14041dad6ef9230360d7dd68b923239e24406617", "actualApiRequests": 3, "injectedFaultRequests": 1, "tokenWindowPauseMsPerApiRequest": 65000, "externalCustomIdsRemoved": 4, "encryptedHistoryItemsPreserved": 1, "projectionMatchesBeforeExternalEdit": true, "toolCommandExits": [0, 0], "secondToolOutput": "42", "answer": "RESULT_42", "exit": 0, "evidence": "rhb-codex-multitool-live-DHA5j4/summary.json", "boundary": "Candidate projection applied by the experiment outside the bridge, after the bridge's standard projection. Does not prove current runtime recovery or that custom IDs caused earlier failures. A later paced baseline preserving custom IDs passed without encrypted history, so it is not an encryption-matched control; runtime field contract unchanged." }
+  },
+  "codexCurrentBridgePacedBaseline": { "passed": true, "client": "Codex 0.162.1 on macOS", "bridgeHash": "619d9a34f1887be7766302fe14041dad6ef9230360d7dd68b923239e24406617", "actualApiRequests": 3, "injectedFaultRequests": 1, "tokenWindowPauseMsPerApiRequest": 65000, "externalProjection": false, "customIdsPreserved": 4, "encryptedHistoryItems": 0, "projectionMatches": true, "toolCommandExits": [0, 0], "secondToolOutput": "42", "answer": "RESULT_42", "exit": 0, "evidence": "rhb-codex-multitool-live-9U1nTf/summary.json", "boundary": "Current bridge directly recovered the paced two-tool CLI request, but this response history emitted no encrypted reasoning and cannot settle the encrypted-history gap." },
+  "codexCurrentBridgePacedRepeat": { "passed": true, "actualApiRequests": 3, "injectedFaultRequests": 1, "customIdsPreserved": 4, "encryptedHistoryItems": 0, "answer": "RESULT_42", "exit": 0, "evidence": "rhb-codex-multitool-live-3QG8Iq/summary.json", "boundary": "A second direct current-runtime two-tool replay passed; encrypted reasoning was not emitted and is not verified by this run." },
+  "codexPacedMediumEffortAttempt": { "passed": false, "actualApiRequests": 2, "injectedFaultRequests": 0, "reasoningEffort": "medium", "lastError": "Generic invalid_request_error without resource detail", "evidence": "rhb-codex-multitool-live-R2YxOC/summary.json", "boundary": "Failed before the second tool result and injection; does not verify recovery. It is not retried by a broad 400 policy." },
+  "portabilityResearch": {
+    "boundary": "External documentation is background, not proof of AgentRouter routing or portability for this deployment. No encryption deletion, new affinity field, or runtime policy is inferred from it.",
+    "sources": [
+      { "url": "https://learn.microsoft.com/en-us/azure/foundry/openai/how-to/responses", "accessed": "2026-10-25", "finding": "Official stateless mode guidance retains encrypted reasoning across turns; it does not promise cross-resource portability." },
+      { "url": "https://docs.litellm.ai/blog/responses-api-encrypted-content-incident", "accessed": "2026-10-25", "finding": "LiteLLM reports organization-bound encrypted content failures and fixes its own deployment routing; this is not an AgentRouter affinity API." },
+      { "url": "https://github.com/NousResearch/hermes-agent/issues/63257", "accessed": "2026-10-25", "finding": "Issue reports deployment-specific replay schema requirements; later maintainer resolution suppresses selected reasoning items. That suppression is not adopted by this bridge." }
+    ]
+  },
+  "notVerified": ["Windows actual Claude Code/Codex with real AgentRouter", "all configuration managers", "all vendors", "long histories and sustained concurrent workloads", "population-wide recovery rate"],
+  "delivery": { "committed": true, "pushedToIndependentTestBranch": true, "mergedMain": false, "clientConfigsChanged": false, "existingServicesRestarted": false }
+}

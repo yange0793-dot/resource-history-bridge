@@ -72,6 +72,29 @@ test('repeated Azure errors replay identical projected history without stripping
   }
 });
 
+test('Codex mixed encrypted history preserves custom IDs and pairings across repeated resource errors', async t => {
+  const body = { ...history, input: [
+    { type: 'additional_tools', id: 'tools_mock', role: 'developer', tools: [{ type: 'custom', name: 'exec', format: { type: 'text' } }] },
+    { type: 'message', id: 'msg_mock', role: 'assistant', phase: 'commentary', content: [{ type: 'output_text', text: 'Read, then add.' }] },
+    { type: 'custom_tool_call', id: 'ctc_read', call_id: 'call_read', name: 'exec', input: 'read input.txt', status: 'completed' },
+    { type: 'custom_tool_call_output', id: 'cto_read', call_id: 'call_read', output: '19\n23\n' },
+    { type: 'reasoning', id: 'rs_mock', summary: [], encrypted_content: 'MOCK_OPAQUE' },
+    { type: 'custom_tool_call', id: 'ctc_add', call_id: 'call_add', name: 'exec', input: 'add 19 23', status: 'completed' },
+    { type: 'custom_tool_call_output', id: 'cto_add', call_id: 'call_add', output: '42' }
+  ] };
+  const f = await fixture(t, (res, n) => send(res, n < 4 ? 400 : 200, n < 4 ? error : success), { historyMode: 'codex' });
+  const result = await post(f.address, body);
+  assert.equal(result.status, 200);
+  assert.equal(result.text, success);
+  assert.equal(f.requests.length, 4);
+  assert.deepEqual(f.requests[0].bytes, Buffer.from(JSON.stringify(body)));
+  const expected = structuredClone(body);
+  delete expected.input[1].id;
+  delete expected.input[4].id;
+  assert.deepEqual(JSON.parse(f.requests[1].bytes), expected);
+  for (const entry of f.requests.slice(1)) assert.deepEqual(entry.bytes, f.requests[1].bytes);
+});
+
 test('repeated resource failure returns the actual final upstream error, not a new bridge status', async t => {
   const f = await fixture(t, res => send(res, 400, error), { resourceAttempts: 3 });
   const result = await post(f.address);
