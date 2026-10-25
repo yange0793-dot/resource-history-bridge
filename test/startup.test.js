@@ -25,7 +25,8 @@ function startupEnv() {
 }
 
 function powershell() {
-  for (const command of ['pwsh', 'powershell.exe']) {
+  const candidates = process.env.RHB_TEST_POWERSHELL === 'powershell.exe' ? ['powershell.exe'] : ['pwsh', 'powershell.exe'];
+  for (const command of candidates) {
     const result = spawnSync(command, ['-NoProfile', '-NonInteractive', '-Command', '$PSVersionTable.PSVersion.Major'], {
       env: startupEnv(), stdio: 'ignore', timeout: 5000
     });

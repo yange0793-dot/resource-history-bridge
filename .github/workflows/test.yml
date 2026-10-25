@@ -45,6 +45,13 @@ jobs:
           set -o pipefail
           node --version
           node --test --test-reporter=tap | tee test-results.tap
+      - name: Run launcher tests with Windows PowerShell 5.1
+        if: runner.os == 'Windows'
+        timeout-minutes: 2
+        shell: pwsh
+        env:
+          RHB_TEST_POWERSHELL: powershell.exe
+        run: node --test --test-reporter=tap test/startup.test.js
       - name: Report Windows execution environment
         if: runner.os == 'Windows'
         shell: pwsh
