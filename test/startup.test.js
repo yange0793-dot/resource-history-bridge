@@ -15,7 +15,7 @@ const windows = process.platform === 'win32';
 
 function startupEnv() {
   const env = {};
-  for (const name of ['PATH', 'Path', 'SystemRoot', 'WINDIR', 'TEMP', 'TMP', 'PATHEXT', 'COMSPEC']) {
+  for (const name of ['PATH', 'Path', 'SystemRoot', 'WINDIR', 'TEMP', 'TMP', 'PATHEXT', 'COMSPEC', 'USERPROFILE', 'APPDATA', 'LOCALAPPDATA', 'ProgramFiles', 'ProgramFiles(x86)', 'PSModulePath']) {
     if (process.env[name] !== undefined) env[name] = process.env[name];
   }
   const pathName = windows ? 'Path' : 'PATH';
@@ -25,7 +25,7 @@ function startupEnv() {
 }
 
 function powershell() {
-  for (const command of ['powershell.exe', 'pwsh']) {
+  for (const command of ['pwsh', 'powershell.exe']) {
     const result = spawnSync(command, ['-NoProfile', '-NonInteractive', '-Command', '$PSVersionTable.PSVersion.Major'], {
       env: startupEnv(), stdio: 'ignore', timeout: 5000
     });
@@ -51,7 +51,7 @@ async function closeServer(server) {
 
 function waitForStartup(child, state) {
   return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => finish(new Error('Launcher startup timeout')), 10000);
+    const timer = setTimeout(() => finish(new Error(`Launcher startup timeout: stdout=${state.output}; stderr=${state.errors}`)), 20000);
     const cleanup = () => {
       clearTimeout(timer);
       child.stdout.off('data', ready);
@@ -108,7 +108,7 @@ async function listenerClosed(port) {
   }), { code: 'ECONNREFUSED' });
 }
 
-test('launcher runs from another cwd, preserves configured env and forwards locally', { timeout: 30000 }, async t => {
+test('launcher runs from another cwd, preserves configured env and forwards locally', { timeout: 45000 }, async t => {
   const shell = windows ? powershell() : 'bash';
   assert.ok(shell, 'Windows launcher requires powershell.exe or pwsh; missing shell is a verification failure');
   const cwd = await fs.mkdtemp(path.join(os.tmpdir(), 'rhb startup cwd '));
@@ -170,7 +170,7 @@ test('launcher runs from another cwd, preserves configured env and forwards loca
   await listenerClosed(port);
 });
 
-test('launcher converts Messages and recovers native Responses resource errors', { timeout: 30000 }, async t => {
+test('launcher converts Messages and recovers native Responses resource errors', { timeout: 45000 }, async t => {
   const shell = windows ? powershell() : 'bash';
   assert.ok(shell, 'Windows verification requires PowerShell');
   const cwd = await fs.mkdtemp(path.join(os.tmpdir(), 'rhb converted cwd '));

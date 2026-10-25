@@ -39,11 +39,18 @@ jobs:
             exit 1
           }
       - name: Run tests and save results
+        timeout-minutes: 3
         shell: bash
         run: |
           set -o pipefail
           node --version
           node --test --test-reporter=tap | tee test-results.tap
+      - name: Report Windows execution environment
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $PSVersionTable
+          Get-Command node, pwsh, powershell.exe | Select-Object Name, Source
       - name: Save test output
         if: always()
         uses: actions/upload-artifact@v4
