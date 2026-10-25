@@ -16,8 +16,14 @@ async function main() {
     upstream: process.env.RHB_UPSTREAM,
     apiKey: process.env.RHB_API_KEY,
     keyHeader: process.env.RHB_KEY_HEADER,
+    userAgent: process.env.RHB_USER_AGENT,
     host: process.env.RHB_HOST,
+    upstreamProtocol: process.env.RHB_UPSTREAM_PROTOCOL,
+    reasoningShape: process.env.RHB_REASONING_SHAPE,
+    historyMode: process.env.RHB_HISTORY_MODE,
     timeoutMs: numberFromEnv('RHB_TIMEOUT_MS', 180000),
+    resourceAttempts: numberFromEnv('RHB_RESOURCE_ATTEMPTS', 10),
+    retryDelayMs: numberFromEnv('RHB_RETRY_DELAY_MS', 1000),
     requestLimit: numberFromEnv('RHB_REQUEST_LIMIT', 8 * 1024 * 1024),
     bufferLimit: numberFromEnv('RHB_BUFFER_LIMIT', 64 * 1024)
   });

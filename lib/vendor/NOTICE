@@ -1,0 +1,30 @@
+Vendored from mixrouter-oss
+Source: https://github.com/yange0793-dot/mixrouter-oss
+Commit: 3e65b6dee5e7481ea2115619096a89545da97477
+Retrieved from the clean local source tree on 2026-10-24.
+Original files: lib/wire-responses.js, lib/upstream-relay.js, lib/tool-input-prune.js
+License: MIT, copyright (c) 2026 yange0793; full text in LICENSE.
+
+Local modifications to wire-responses.js:
+- Explicit caller-selected reasoning history shape.
+- Stable per-content-part keys and unsigned plaintext reasoning replay.
+- Tool arguments must be complete JSON objects with original call_id/name.
+- Protocol errors close open blocks and retain diagnostic error codes.
+- Lifecycle response metadata retained in message_start.
+
+The messages.js wrapper validates supported input and normalizes refusal/custom
+JSON tools, done-only payloads, and terminal output snapshots before feeding the
+vendored AnthropicStream. It uses the existing memorySink and message collector.
+Rate-limit error codes are mapped to the Messages rate_limit_error type.
+
+Opaque reasoning compatibility is lossy: createMessagesRenderer defaults to
+opaqueReasoning: 'omit', matching the original converter. Encrypted reasoning
+without plaintext is not displayed, retained internally, or disguised as a
+signature; visible text and tools are still delivered. The caller's original
+Responses events are never mutated. A valid opaque-only completed response
+finishes normally in omit mode; the bridge does not retry or reject empty output.
+Use opaqueReasoning: 'error' to reject non-displayable reasoning strictly.
+Messages clients cannot replay encrypted state through this conversion; whether
+later tool history without plaintext reasoning is accepted requires real upstream
+validation. No encrypted content is logged by this module.
+upstream-relay.js and tool-input-prune.js are retained unchanged.

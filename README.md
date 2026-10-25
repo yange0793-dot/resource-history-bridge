@@ -1,145 +1,133 @@
 # resource-history-bridge
 
-一个独立运行的本机 HTTP 桥，也可作为 Node.js 纯库使用。不依赖 Mixrouter、特定 Agent、桌面应用或第三方 npm 包；不修改客户端持久历史，也不会自动修改任何软件配置。
+独立运行的本机 API 桥，优先支持 Codex 的 Responses 请求，以及 Claude Code 的 Messages → Responses 转换。可作为 Node.js 纯库使用，不依赖 Mixrouter、模型管理工具、某个 Agent 或第三方 npm 包，不自动修改客户端配置或持久历史。
 
-## 它恢复什么
+## Azure 跨资源历史恢复
 
-仅在 `/responses` 上游返回下面这个已知错误时，尝试一次最小历史投影：
+### Azure 跨资源历史错误
+
+仅在 Responses 上游明确返回下面的已知错误、且尚未向客户端提交输出时，执行一次最小历史投影；投影后再遇同类资源错误，继续重发同一投影请求，不再次删除字段：
 
 > The requested item was created under a different Azure OpenAI resource.
 
-第一次仍发送原始 JSON 请求字节；恢复请求只去掉 `input` 数组中 **`reasoning.id` 和 `function_call.id`**。保留 `encrypted_content`、工具 `call_id`、`name`、`arguments`、工具输出、文本、模型和所有其他请求字段。遇到其他类型的顶层 item `id` 则拒绝恢复，不删除它们、不重打一条不确定的投影；不生成替代 `call_id`，不改 session/header/cache 身份，不切上游、模型或密钥。
+原生 Responses 第一次发送原始 JSON 请求字节；默认 `minimal` 模式的恢复请求只删除 `input` 中 `reasoning.id` 和 `function_call.id`。显式 `codex` 模式还允许删除符合完整性校验的 `message.id`。两种模式都保留 `encrypted_content`、工具 `call_id`、名称、参数、工具结果、文本、模型及其他字段，不换上游、模型、密钥或会话身份。
 
-识别范围是 HTTP 400 JSON 错误，或 HTTP 2xx / 400 提交前 SSE 的已知 `error` / `response.failed` 帧。纯库也只识别实际错误 envelope；字符串必须先成功解析为 JSON，prompt / delta / 普通 message 含错误原句不会触发。含正文输出或未知字段的错误不参与恢复。其他 400、认证失败、限流、500、断网和无细节错误不重试。总共最多两次上游请求，第二次错误直接透传；不是通用重试器。
+检测 HTTP 400 JSON、提交前已知 SSE 错误，以及 AgentRouter 的一种实测包装：HTTP 400 的响应头为 `text/event-stream`、正文却是完整 JSON。后者必须在有界缓冲中完整、严格解析并正常结束，才参与恢复。
 
-无明确已知错误的空流、零用量响应和无细节 `PI_AI_ERROR` 不触发此恢复。它们的原因不由本组件解释，也不会因为零输出或 usage 为 0 就重试。
+只有特定资源错误才触发；其他 400、认证失败、限流、500 和无细节错误不参与这项恢复。
 
-这一投影方法依据一次 AgentRouter Azure 后端的工具续接对照实验：原生回放跨资源失败，去掉两类 item ID、保留加密 reasoning 与工具配对后得到 `RESULT_42`。**独立桥本身只做了本机 mock 回归，未对真实上游联网验证，也不保证其他供应商、全部历史类型或长期负载有效。**
+**证据边界：**一次 AgentRouter 工具续接对照中，移除两类 ID、保留加密 reasoning 和工具配对后返回预期 `RESULT_42`。这不证明所有历史类型可移植。桥仍拒绝带 `previous_response_id`、`conversation`、`item_reference`、非对象历史项、工具缺配对、其他类型顶层 item ID 或没有可投影 ID 的恢复。默认 `minimal` 模式下，普通助手的 `message.id` 也在未支持范围；不根据名字猜测其安全性。
 
-## 直接启动
+显式设置 `RHB_HISTORY_MODE=codex` 可启用 Codex 实验支持的投影：仅移除 `message`、`reasoning`、`function_call` 三类 item 的 `id`，继续保留 `additional_tools`、`custom_tool_call`、`custom_tool_call_output` 的 `id`，并严格验证完整内联内容、工具 schema 与工具配对。引用历史、不完整项及其他类型的顶层 item ID 仍拒绝。具体接受形状见 [当前范围](docs/scope.md#codex-历史投影契约)。早期外层 capture 实验在注入已知错误后，仅移除 8 个完整 `message.id`，保留其他字段，由真实 API 返回 `RESULT_42`、Codex 退出 0；这验证候选投影与该上游样本兼容，并非当前桥的直接恢复实验。当前桥 `codex` 模式另由真实 Codex CLI 对本机 mock 的故障注入验证工具结果续接，错误与恢复响应均来自 mock。**两项都不是当前实现对自然 Azure 跨资源故障的实跑，也不构成跨资源恢复率证明**；真实 AgentRouter baseline 成功单独记录。
 
-需要 Node.js 18 或更新版本。不需要 `npm install`。
+### 空响应保持上游行为
+
+本组件不修复空响应：不因正常完成但没有内容而重试，也不生成空输出的 422/502 错误。原生 Responses 原样转发；Messages 转换在明确合法终态后正常完成，即使内容为空。旧的 `RHB_RECOVER_EMPTY` / `recoverEmpty` 不再接入恢复逻辑。
+
+资源恢复在**桥收到的每个 HTTP 请求内**最多投影一次，默认最多 10 次上游请求、重试间隔 1 秒，共用取消信号与总时限。仅重复已知的未输出 Azure 资源错误，投影后的加密材料、工具配对及其余内容保持相同；Messages 已重建为无 item ID 的完整历史时可以直接重发原转换字节。最后一次仍失败就返回实际上游错误，不另造终止性状态。客户端或外层代理重发请求不属于桥内预算；真正的其他错误、截断和不能转换的协议仍如实呈现，不伪造成功或无限重放历史。
+
+## Claude Code 转换复用现有代码
+
+`RHB_UPSTREAM_PROTOCOL=responses` 使 `/messages` 请求通过独立适配层转换为 `/responses`，再将上游响应转回 Messages；Codex 的原生 Responses 请求照常透传。
+
+转换器复用 Mixrouter 的 MIT 许可模块，源文件、版本和许可证记录在 `lib/vendor/NOTICE` 与 `lib/vendor/LICENSE`。运行不需要 Mixrouter，不读取它的配置，也不连接它的端口。
+
+转换路径把 Messages 的 `x-api-key` 认证映射为 Responses Bearer；已有 Authorization 不覆盖。纯透传路径仍保留客户端认证，桥统一密钥选项优先。Messages 的超长 `metadata.user_id` 映射为稳定 SHA-256 标识，避免超过 Responses 的 64 字符限制，不改变客户端原历史。
+
+兼容已实际捕获的 Claude Code SDK 字段：固定 beta 路径、`thinking.display=omitted` 与保留全部思考的 context-management no-op。其他上下文裁剪策略不盲删除；display 在 Responses 中没有等价控制，转换不保证客户端隐藏思考。
+
+只支持明确可表达的 Messages 文本、图像、工具与明文 thinking 形状。与已有转换路径一致，默认不展示无明文的加密 reasoning 项；它不能无损表示在 Messages 中，也不会伪造可回放签名。若合法完成响应仅有 opaque 项，默认省略模式仍正常完成，不新增空输出错误。其他不能表达的内容返回错误，不静默丢弃。工具配对保留，Responses 历史按内容重建、不依赖原生 item ID。原协议透传仍是默认模式，不强制所有供应商进行协议转换。`RHB_REASONING_SHAPE=summary`（默认）或 `content` 控制转换后的 reasoning 历史形状，按真实上游能力选择，不以 Agent 名称猜测。
+
+本组件不是所有协议无损互转器。`/chat/completions` 只支持原协议转发，尚没有 Chat → Responses 转换；`/responses/compact` 不参与资源恢复或空输出恢复。Messages 常见客户端附带的固定 `?beta=true` 可接受，其余 query 不接受。
+
+## 启动
+
+需要 Node.js 18 或更新版本，不需要 `npm install`。
 
 ```sh
-cd resource-history-bridge
-node --test
-RHB_UPSTREAM=https://api.example.com/v1 node cli.js
-```
-
-`api.example.com` 只是占位地址：改成你实际使用的 Responses 服务 API Base URL。URL 不允许用户名、密码、query 或 fragment。Base URL 为 `/v1` 时会请求上游 `/v1/responses`，为根路径时会请求 `/responses`；按上游真实入口填写，不要重复 `/v1`。
-
-默认监听 `http://127.0.0.1:8790/v1`。在 Agent 的 **API Base URL / Base URL / endpoint** 字段中填这个地址，并继续选择原模型、Responses 协议和原 API key。客户端发出的 Authorization / `api-key` / `x-api-key` 等 header 会透传。模型仍在调用方请求 JSON 中指定。
-
-如果客户端不能更改 API Base URL，或它只支持其他协议，这个桥不能让它自动生效。SDK 若会自动补 `/v1`，Base URL 应填写 `http://127.0.0.1:8790`；桥同时接受 `/responses` 和 `/v1/responses`。
-
-按 `Ctrl+C` 停止。CLI 不接受任何 argv，包括密钥参数。
-
-### 可选：桥从环境读取上游密钥
-
-优先使用客户端原有密钥管理。若需要桥统一提供密钥，在当前 shell 中安全读取，不把密钥写进命令历史或文件。
-
-Bash：
-
-```sh
-read -r -s -p 'API key: ' RHB_API_KEY
-printf '\n'
-export RHB_API_KEY
-export RHB_UPSTREAM=https://api.example.com/v1
+RHB_UPSTREAM=https://api.example.com/v1 \
+RHB_UPSTREAM_PROTOCOL=responses \
 node cli.js
-unset RHB_API_KEY
 ```
 
-zsh：
+`api.example.com` 是占位地址，替换为实际 API Base URL，不要填写完整 `/responses` 路径。URL 不允许用户名、密码、query、fragment。Base URL 为 `/v1` 时连接 `/v1/responses`，根路径时连接 `/responses`；按真实入口填写。
 
-```sh
-read -r -s 'RHB_API_KEY?API key: '
-printf '\n'
-export RHB_API_KEY
-export RHB_UPSTREAM=https://api.example.com/v1
-node cli.js
-unset RHB_API_KEY
-```
+默认监听 `http://127.0.0.1:8790`。CLI 的协议转换默认关闭；上面的命令或启动脚本显式开启，避免影响已有原协议用户。空响应不另行处理。
 
-环境提供的密钥会覆盖调用方三类认证 header。默认发送 `Authorization: Bearer <环境密钥>`；直接 Azure 风格可设置 `RHB_KEY_HEADER=api-key`。密钥只存在于进程环境/内存和上游请求，不记录请求正文或认证日志。环境变量仍可能被同机有权限的进程读取。
+默认接入地址：
+
+- Codex / Responses：Base URL 填 `http://127.0.0.1:8790/v1`。
+- Claude Code / Messages：Base URL 填 `http://127.0.0.1:8790`；Responses 上游需开启转换。
+- 继续使用原模型和密钥。模型从客户端请求中读取，不设置隐藏槽位。
+- SDK 如果自动补 `/v1`，使用根地址，避免重复。
+
+可使用 `scripts/start-macos.command` 或 `scripts/start-windows.ps1`；脚本不保存密钥、不自动修改配置、不安装后台服务。详细接入见 [客户端说明](docs/clients.md)。Windows 脚本已提供，但没有在 Windows/PowerShell 中实跑；不能用 macOS 测试替代。
+
+按 `Ctrl+C` 停止。CLI 不接受 argv 或密钥参数。
 
 | 环境变量 | 默认值 | 说明 |
 | --- | --- | --- |
-| `RHB_UPSTREAM` | 无，必填 | 固定上游 API Base URL；生产建议 HTTPS |
-| `RHB_API_KEY` | 未设置 | 不设置则使用调用方 header；设置则覆盖上游密钥 |
-| `RHB_KEY_HEADER` | `authorization` | 仅 `authorization` / `api-key` / `x-api-key` |
+| `RHB_UPSTREAM` | 必填 | 固定上游 API Base URL，生产建议 HTTPS |
+| `RHB_UPSTREAM_PROTOCOL` | `passthrough` | `responses` 开启 Messages → Responses；否则原协议转发 |
+| `RHB_REASONING_SHAPE` | `summary` | 转换时的 reasoning 形状，`summary` / `content` |
+| `RHB_HISTORY_MODE` | `minimal` | `codex` 仅投影已校验的 message/reasoning/function_call ID；保留 additional_tools/custom ID |
+| `RHB_API_KEY` | 未设置 | 默认透传客户端认证；设置则覆盖上游认证 |
+| `RHB_KEY_HEADER` | `authorization` | `authorization` / `api-key` / `x-api-key` |
+| `RHB_USER_AGENT` | 未设置 | 仅显式设置时覆盖出站 User-Agent；默认保留客户端值 |
 | `RHB_HOST` | `127.0.0.1` | 仅 `127.0.0.1` / `::1` / `localhost` |
 | `RHB_PORT` | `8790` | 1–65535 |
-| `RHB_TIMEOUT_MS` | `180000` | 从接收请求体到两次上游结束的共用总时限，1–1800000 ms |
-| `RHB_REQUEST_LIMIT` | `8388608` | 请求体最大字节数，最大 64 MiB |
-| `RHB_BUFFER_LIMIT` | `65536` | 提交前错误/SSE 缓冲上限，最大 64 KiB；到上限即透传且不恢复 |
+| `RHB_TIMEOUT_MS` | `180000` | 从接收正文到全部尝试结束的总时限，最大 1800000 ms |
+| `RHB_RESOURCE_ATTEMPTS` | `10` | 每 HTTP 请求的上游次数上限（1–100），仅已知资源错误重试 |
+| `RHB_RETRY_DELAY_MS` | `1000` | 已知资源错误重试间隔（0–60000 ms），受总时限与取消约束 |
+| `RHB_REQUEST_LIMIT` | `8388608` | 请求/转换正文上限，最大 64 MiB |
+| `RHB_BUFFER_LIMIT` | `65536` | 未提交检查缓冲上限，最大 64 KiB；超限不恢复 |
 
-`/responses/compact`、`/chat/completions` 和 `/messages` 支持普通 POST JSON 转发，**不参与恢复，不修复它们的签名或历史**。其他路径、query、非 JSON 和压缩请求体不接受。不是 Azure 原生含 `api-version` query 的通用网关；本版适用于固定、不要求 URL query 的 API 入口。
+优先使用客户端已有密钥管理。若需要桥统一提供密钥，在 shell 中安全读入 `RHB_API_KEY`，不写入命令历史、脚本或文件。默认发送 Bearer；直接 Azure 风格可选 `RHB_KEY_HEADER=api-key`。环境提供的密钥覆盖客户端三类认证 header；环境仍可能被同机有权限的进程读取。
 
 ## 作为库使用
 
 ```js
-const {
-  isKnownResourceError,
-  projectResponsesHistory,
-  createBridge
-} = require('./');
+const { createBridge, projectResponsesHistory, isKnownResourceError } = require('./');
 
-// requestBody 必须是你自己的完整 Responses 历史；不要只给引用。
-const projection = projectResponsesHistory(requestBody);
-if (isKnownResourceError(upstreamError) && projection.ok) {
-  // 由调用者负责安全提交判据、最多一次恢复和总时限。
-  // projection.body 是新对象；requestBody 不被修改。
+async function main() {
+  const bridge = createBridge({
+    upstream: process.env.RHB_UPSTREAM,
+    upstreamProtocol: 'responses',
+    historyMode: 'codex', // Codex 显式历史投影；不需要时保留默认 minimal。
+    timeoutMs: 180000
+  });
+  await bridge.listen(8790);
+  // 用完 await bridge.close()，关闭 listener、在途请求和本桥 socket。
 }
-
-const bridge = createBridge({
-  upstream: process.env.RHB_UPSTREAM,
-  apiKey: process.env.RHB_API_KEY,
-  timeoutMs: 180000
-});
-await bridge.listen(8790);
-// 用完后 await bridge.close(); 关闭监听、在途上游和本桥 socket。
 ```
 
-上例的 `require('./')` 假设代码在包目录执行；安装到其他项目后使用包名 `require('resource-history-bridge')`。上例中的 `await` 放在 async 函数内。库的投影返回 `{ ok: true, body, removed }`，或 `{ ok: false, code, message }`。`createBridge` 返回 `{ server, listen, close }`；库允许 `listen(0)` 分配临时端口，CLI 不允许端口 0。库没有读取环境变量的隐藏行为：需要调用方显式传选项。
+库不隐藏读取环境变量，选项须显式传入；允许 `listen(0)` 分配临时端口。`projectResponsesHistory` 返回新对象而不修改原件；调用纯投影库时，由调用方负责提交边界和重试预算。
 
-## 不能恢复的历史
+## 提交与安全边界
 
-遇到已知资源错误后，下列情况返回 HTTP 409 的 `resource_history_bridge_error`，不会删字段拼造历史：
+资源错误检查有界。一旦发出正文、思考、工具或无法安全解释的事件，不透明重放。原协议恢复保留保守 SSE 提交边界；未知/坏帧或缓冲超限立即透传并禁用恢复。转换路径的截断或坏协议仍如实报错；合法空完成正常结束，不另行检查或重试。
 
-- 存在 `previous_response_id` 或服务器 `conversation` 引用，包括同时给了部分 `input` 的情况。
-- `item_reference`，只有文本或空 `input`，没有可展开的完整显式历史。
-- `input` 中有非对象项（字符串、null、数组或其他基元），不能安全投影。
-- 工具调用/结果缺配对、顺序不对、重复 `call_id`，或缺 `name` / `arguments` / `output`。
-- 存在其他类型的顶层 item ID（包括 message / function_call_output / 未知类型的 `id`）：这些类型未实测，不删除也不尝试不确定的恢复。`message.id` 即使是客户端 fallback `msg_pi_...` 也拒绝，不能据名称认定可移除。
-- 本组件不宣称覆盖真实混合长历史；历史中出现上述未支持项时仍拒绝恢复。
-- 没有支持投影的两类 item ID。
+这是没有独立鉴权的**单机单用户**桥，只监听 loopback、检查 Host、拒绝浏览器 Origin/Sec-Fetch-Site、不启用 CORS。固定上游，客户端不能从 URL/正文选择代理目标。不能隔离同机恶意进程或其他用户；统一密钥可能被能够访问端口的本机进程消耗。不要通过端口映射、远程转发将它公开。
 
-普通第一次请求不会预先拒绝这些上游本可处理的历史。桥无法判断调用方是否遗漏了早期历史，只能检查明确引用和工具配对；发送完整历史仍由调用方负责。
+历史和加密推理材料会发送给配置的上游；加密字段不意味着上游不可读。日志不记录密钥、正文或加密推理。上游错误作为 API 响应返回给客户端，属于正常转发；不把错误伪装为空答。
 
-## SSE 与提交边界
-
-- 只暂存有界、已识别且无输出的 `response.created` / `response.queued` / `response.in_progress` 生命周期帧。恢复时丢弃第一条失败流的这部分未提交帧。
-- 文本/工具/正文帧、未识别事件、坏 JSON、注释心跳、未知字段或原始未知字节立即提交。一旦提交，后续资源错误不再重试，流按原样交给客户端。
-- 已识别 SSE 前缀的不完整帧可暂存至 delimiter、字节上限或共用总时限；坏帧不会当作无输出。
-- 有限兼容一种错误正文误标：仅 HTTP 400、未压缩、Responses 恢复路径上，当 `text/event-stream` 正文首个非 JSON 空白字节为 `{`，改为有界完整 JSON 错误解析。支持前导空白、分块与 UTF-8 分块，但必须等 HTTP 正常完整结束才恢复。尾随坏字节、非法 UTF-8、坏 JSON、输出/未知字段仍不恢复；不是对任意正文猜测错误。真正 SSE 仍按上述流边界处理，非 400 和其他 Content-Type 不增加猜测。
-- 错误缓冲太大或上游忽略 `Accept-Encoding: identity` 返回压缩内容时，直接透传而不检查恢复。
-- 上游连接不完整：未提交时 HTTP 502；已经提交时关闭下游，不能伪造一个完整响应。超时未提交时 HTTP 504，已提交则关闭连接。取消客户端请求会中止在途上游，不会再发恢复请求。
-- 只是 SSE 语法或逻辑上缺少完成帧、而 HTTP 正常结束时，现有字节原样透传；桥不生成完成帧，也不据此重试。
-
-## 安全边界
-
-这是**单机单用户、没有独立鉴权**的本机桥，不是多用户网关。固定上游，不能从 URL/请求体指定代理目标。只监听 loopback，检查 loopback `Host`，拒绝任何 `Origin` / `Sec-Fetch-Site` 浏览器 header，不启用 CORS；因此浏览器网页不是受支持客户端。
-
-这些检查不能隔离同机恶意进程或其他本机用户。若设置了统一上游密钥，能访问本机端口的进程可能消耗该密钥额度；不要暴露端口，不用 SSH/容器端口映射将它公开。请求和加密推理材料均会发送给配置的上游；加密字段不代表上游不可读取内容。HTTP 上游不加密网络传输，生产使用 HTTPS。
-
-桥只输出启动监听地址与通用启动失败消息，不输出 API key、请求正文、加密 reasoning、上游错误内容或 upstream URL。上游错误仍会作为 API 响应返回给调用方，这是正常转发而不是日志。
-
-## 测试
+## 验证
 
 ```sh
 node --test
 ```
 
-测试只创建临时 loopback mock 上游/桥，结束后关闭 listener、socket 和子进程。不需要网络密钥，不访问真实上游。覆盖纯库投影、原请求不可变、身份保留、工具配对、JSON/SSE 恢复预算与提交边界、引用拒绝、请求/缓冲上限、截断、取消、超时、本机访问限制和 CLI 启停。
+单测使用 loopback mock，不需要真实密钥。测试覆盖历史不可变、配对、身份保留、JSON/SSE 错误包装、资源恢复提交边界、空响应不重试、终态独有载荷、取消、超时、转换和 CLI。
 
-未验证范围包括真实供应商自动恢复、不同 Agent 的配置入口、所有 Responses 项类型、长期并发负载和环境中的 Node 18；当前回归运行版本见交付说明。请先用不敏感的小会话确认你的上游与客户端兼容，再用于实际工作。
+真实客户端实验与 mock 测试是不同证据。本轮 macOS 实际 CLI 结果：
+
+- Claude Code → 桥 → AgentRouter：纯文本返回 `CLAUDE_BRIDGE_OK`，Read 工具调用及结果续接返回 `RESULT_42`。
+- Codex → 桥 → AgentRouter：未注入故障的 baseline 纯文本及工具调用/结果续接成功。
+- 早期 Codex 外层 capture 实验：注入已知资源错误后，实验层仅移除 8 个完整 `message.id`，保留 additional_tools/custom ID、call_id 配对与其他字段；真实 API 的投影请求返回 `RESULT_42`、Codex 退出 0。这是候选投影与真实上游样本兼容证据，不是当前桥的直接恢复验证。
+- 真实 Codex CLI → 当前桥 `codex` 模式 → 本机 mock：资源错误注入后完成工具结果续接，属于 CLI 兼容与投影机制证据。mock 同时提供错误和恢复响应，不是真实 AgentRouter 恢复。两项都不是当前实现对自然 Azure 跨资源故障的实跑，不能据此推算跨资源恢复率。
+- 当前修订桥 → 真实 AgentRouter 的 Codex 注入实验已成功：工具实际执行并得到 `42`；本机注入资源错误后，桥仅删除 7 个约定 `message.id`、保留 custom/additional ID、call_id 和其余字段；真实恢复请求返回非空 completed 与 `RESULT_42`，Codex 退出 0。共 2 次真实 API 请求、1 次本机错误注入。之前被 eastus2 限流挡住的失败记录保留；本次成功仍不等于自然 Azure 故障恢复率。
+- 旧版的空响应恢复实验不作为当前功能：2026-10-25 按用户要求移除空响应重试和额外空输出错误；旧验证记录仅保留为历史，不能代替本次验证。
+
+旧版三版本 366/366 的记录保存在 [历史验证](docs/verification-20261025.json)，其中空响应恢复功能已撤销，不代表当前代码。当前修订的全量、真实上游和 Windows runner 结果将在本轮验证后单独记录；不以旧版结果代替。
+
+`.github/workflows/test.yml` 已提供 Ubuntu/macOS/Windows × Node.js 18/22/24 矩阵，包含启动脚本语法检查与 `node --test`；矩阵尚未上传执行，Windows/PowerShell 和 Linux 尚未实跑。macOS 上的版本通过不代替其他平台验证，以上结果也不承诺全部供应商、历史类型、配置管理工具或长期并发。
