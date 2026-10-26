@@ -13,7 +13,8 @@ try {
     }
 
     if (-not (Test-Path Env:RHB_CLIENT) -and -not (Test-Path Env:RHB_HISTORY_MODE)) {
-        $client = Read-Host 'Client codex / harness / claude-code / generic [codex]'
+        Write-Host 'Client codex / harness / claude-code / generic [codex]'
+        $client = Read-Host
         if ([string]::IsNullOrEmpty($client)) {
             $client = 'codex'
         }

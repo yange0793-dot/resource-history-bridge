@@ -51,7 +51,9 @@
   ],
   "ci": {
     "status": "pending",
-    "matrix": "Ubuntu/macOS/Windows x Node18/22/24; actual Windows PowerShell7 and5.1 launcher tests"
+    "matrix": "Ubuntu/macOS/Windows x Node18/22/24; actual Windows PowerShell7 and5.1 launcher tests",
+    "retainedFailedRuns": [40258483304, 40258499568],
+    "initialFailure": "Windows captured stdin did not include the Read-Host prompt; all five client choices selected and started correctly but prompt visibility assertions failed. Ubuntu/macOS passed. Windows launcher will print choices explicitly before reading input; tests are not skipped or weakened."
   },
   "delivery": {
     "localClientsStayOnMixrouter": true,
