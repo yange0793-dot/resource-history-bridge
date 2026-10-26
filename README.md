@@ -64,7 +64,7 @@ node --test
 
 测试使用 loopback mock，不需要真实 key。恢复用例保留官方目标 URL，测试专用传输映射将请求送到本机 mock；其他目标的透传用例检查原始字节、单次请求、状态与协议不被改变。
 
-加密 reasoning 降级版本已在本机 Node.js 18/22/24 各通过 **1078/1078**，其中新增故障与安全边界测试 132 项。安装版 Harness 原有 71＋91 项检查通过；新增两轮工具续接故障注入的 25 项检查通过，覆盖保留可读摘要和省略纯密文 reasoning，原历史不改、临时连接全部关闭。见 [本次验证记录](docs/verification-encrypted-reasoning-20261026.json)。本次未提交、未推送或部署，未改客户端配置或重启服务；尚未执行新增版本的 Windows/Linux CI，也未复现自然 AgentRouter 解密故障。
+加密 reasoning 降级版本已在本机 Node.js 18/22/24 各通过 **1078/1078**，其中新增故障与安全边界测试 132 项。安装版 Harness 原有 71＋91 项检查通过；新增两轮工具续接故障注入的 25 项检查通过，覆盖保留可读摘要和省略纯密文 reasoning，原历史不改、临时连接全部关闭。见 [本次验证记录](docs/verification-encrypted-reasoning-20261026.json)。已提交并推送到 `feat/encrypted-reasoning-recovery-20261026`，[本版跨平台 CI](https://github.com/yange0793-dot/resource-history-bridge/actions/runs/40272685786) 的 Windows/macOS/Linux × Node18/22/24 九个组合全部通过，含 Windows PowerShell5.1 实际启动检查。尚未合入 `main` 或部署，未改客户端配置或重启服务，也未复现自然 AgentRouter 解密故障。
 
 以下为加密 reasoning 降级加入前的目标识别版本证据，不当作新增路径的验证：本次目标识别与透传修改在本机 Node.js 18/22/24 各 946/946；恢复原有伪造主机组合用例后，受影响文件在三版 Node 各 29/29。安装版 Codex 的 152 项复制历史在两类故障注入下均完成精确投影，Harness 的 71 项与 91 项检查通过，见 [本次记录](docs/verification-provider-scope-20261026.json)。已提交并推送到 `main`，[跨平台 CI](https://github.com/yange0793-dot/resource-history-bridge/actions/runs/40268472510) 的 Windows/macOS/Linux × Node.js 18/22/24 九个组合全部通过，包含 Windows PowerShell 7/5.1 实际启动检查。首次 Windows 测试预加载路径问题已修正；后续 macOS Node24 一项触发现有1秒测试时限，原样重跑失败作业通过，未改运行代码或放宽断言。未改客户端配置或重启服务。
 

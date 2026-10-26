@@ -211,7 +211,7 @@ async function main() {
 
 ## 验证记录与未核范围
 
-验证按版本、执行环境和故障来源区分；历史数字不自动继承给新代码。当前加密 reasoning 降级版本已通过本机 Node.js 18/22/24 各 1078/1078，以及安装版 Harness 原有 71＋91 项和新增 25 项 loopback 检查，运行与测试文件指纹在验证期间未变。下表首行为当前版本，其他行为历史证据；不以旧 CI 或旧客户端实验代替新增代码。当前修改尚未提交、推送或部署，未执行本版 Windows/Linux CI。
+验证按版本、执行环境和故障来源区分；历史数字不自动继承给新代码。当前加密 reasoning 降级版本已通过本机 Node.js 18/22/24 各 1078/1078，以及安装版 Harness 原有 71＋91 项和新增 25 项 loopback 检查，运行与测试文件指纹在验证期间未变。下表首行为当前版本，其他行为历史证据；不以旧 CI 或旧客户端实验代替新增代码。当前代码已提交并推送功能分支，Windows/macOS/Linux × Node18/22/24 九个 CI 组合全部通过；尚未合入 `main` 或部署。
 
 恢复测试在保留官方目标 URL 的同时，通过测试专用传输映射将 HTTP 请求送到本机 mock；不增加生产声明开关，不读取真实 key，也不实际出网。其他目标用例验证仅一次上游调用、请求/响应字节与协议保持、错误原样转发。
 
@@ -220,7 +220,7 @@ async function main() {
 
 | 记录 | 能证明什么 | 不能证明什么 |
 | --- | --- | --- |
-| [2026-10-26 加密 reasoning 降级](verification-encrypted-reasoning-20261026.json) | 本机 Node.js 18/22/24 各 1078/1078，含新增 132 项明确错误、投影、预算、输出/未知/截断保护、作用域及脱敏检查；安装版 Harness 原有 71/91 项和新增两轮原生工具续接 25 项通过，可读摘要/纯密文两种历史按约定投影，调用方历史不改，临时连接已关闭。 | 全部为 loopback 故障注入，未复现自然 AgentRouter 解密故障；本版未执行 Windows/Linux CI，未验证安装版 Codex/Claude Code 的加密故障续接或完整 Harness GUI；不保证所有模型、历史形状或长期负载。未提交、推送或部署，未改客户端配置或重启服务。 |
+| [2026-10-26 加密 reasoning 降级](verification-encrypted-reasoning-20261026.json) | 本机 Node.js 18/22/24 各 1078/1078，含新增 132 项明确错误、投影、预算、输出/未知/截断保护、作用域及脱敏检查；安装版 Harness 原有 71/91 项和新增两轮原生工具续接 25 项通过，可读摘要/纯密文两种历史按约定投影，调用方历史不改，临时连接已关闭。 | Windows/macOS/Linux × Node18/22/24 九个 CI 组合全部通过，含 PowerShell5.1 实际启动检查；均为 mock，不证明自然 AgentRouter 解密故障恢复。未验证安装版 Codex/Claude Code 的加密故障续接或完整 Harness GUI，不保证所有模型、历史形状或长期负载。已推送功能分支、未合入 main 或部署，未改客户端配置或重启服务。 |
 | [2026-10-26 目标识别与透传](verification-provider-scope-20261026.json) | 本机 Node.js 18/22/24 各 946/946；后续恢复原始伪造主机组合后受影响文件各 29/29。其他目标单次调用、原字节/协议/编码、上游错误透传；安装版 Codex 152 项两类注入均精确投影完成，Harness 71/91 项通过并清理临时资源。 | 已推送 `main`，本次 Windows/macOS/Linux × Node18/22/24 九个 CI 组合全部通过，含 PowerShell7/5.1；首次测试路径失败及后续原样重跑的超时样本已保留，未部署；不证明自然上游故障恢复率、所有历史或长期负载。 |
 | [2026-10-26 AgentRouter 聚焦](verification-agentrouter-focus-20261026.json) | 本机 Node.js 18/22/24 各 887/887；安装版 Codex 152 项复制历史的 Azure 包装与严格400注入均精确投影后完成；安装版 Harness 71 项与 91 项检查通过，临时 listener/socket 全关闭。候选两轮及合入 main 的 Windows/macOS/Linux × Node18/22/24 九个 CI 组合全部通过，Windows PowerShell7/5.1 实际启动检查通过。 | 不证明自然上游故障恢复率、所有历史类型、管理工具版本或长期负载；未修改本地客户端或重启现有服务。 |
 | [2026-10-26 Codex 同步](verification-codex-parity-20261026.json) | 此前 runtime cc89085：macOS Node.js 18/22/24 各 827/827；Ubuntu/macOS/Windows × 三版 Node 九个 CI job 成功，实际 PowerShell 启动检查。安装版 Codex 0.164.0 对 loopback 故障 mock 完成 152 项历史投影与工具续接；Harness parity 71 项、完整 91 项检查通过。 | 不验证本轮聚焦重构；Codex 故障与恢复响应均为 mock，不是自然 AgentRouter 跨资源故障；不覆盖所有历史或持续负载。 |
@@ -228,4 +228,4 @@ async function main() {
 | [2026-10-25 Harness 连续恢复](verification-harness-recovery-20261025.json) | 历史连续恢复版本的 loopback 单测、安装版 PiAiAdapter、脱敏/预算/清理检查；一项普通真实上游 smoke。 | 非完整 Harness GUI，普通 smoke 非自然资源故障；记录中的当时 Windows/推送状态不代表后续同步版本。 |
 | [更早 Harness](verification-harness-20261025.json) / [早期验证](verification-20261025.json) | 早期行为及实验存档。 | 被取消的全客户端空响应策略不代表当前功能。 |
 
-此前同步和目标识别版本已有九平台 CI 成功及提交/推送/合入记录；当前加密 reasoning 降级修改仍未提交、推送或运行跨平台 CI，两者不能混用。历史 Windows CI 使用 mock，未验证 Windows 安装版 Claude Code/Codex 对真实 AgentRouter。配置管理工具仅有 endpoint 接入说明，未实测全部工具/版本。
+此前同步和目标识别版本已有九平台 CI 成功及提交/推送/合入记录；当前加密 reasoning 降级版本也有独立九平台 CI 成功记录，已推送功能分支但未合入 main，两者不能混用。Windows CI 使用 mock，未验证 Windows 安装版 Claude Code/Codex 对真实 AgentRouter。配置管理工具仅有 endpoint 接入说明，未实测全部工具/版本。

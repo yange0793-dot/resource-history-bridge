@@ -66,17 +66,25 @@
   },
   "testTransport": "Official configured URLs are mapped to loopback by a test-only helper before DNS; no real keys, user profiles or user sessions are read.",
   "realUpstreamCalls": 0,
-  "ci": {"status": "not run for this uncommitted revision", "priorCiIsNotThisRevision": true},
+  "ci": {
+    "status": "success",
+    "verifiedCommit": "740ff9e6606a6b75d92f84a4d7660ec5b671b8f6",
+    "runId": 40272685786,
+    "url": "https://github.com/yange0793-dot/resource-history-bridge/actions/runs/40272685786",
+    "matrix": "Ubuntu/macOS/Windows x Node18/22/24; all nine jobs passed, including Windows launcher syntax and actual PowerShell5.1 launcher tests",
+    "priorCiIsNotThisRevision": true
+  },
   "delivery": {
-    "committed": false,
-    "pushed": false,
+    "committed": true,
+    "pushed": true,
+    "branch": "feat/encrypted-reasoning-recovery-20261026",
+    "mergedToMain": false,
     "clientConfigurationsChanged": false,
     "existingServicesRestarted": false,
     "localPluginRedeployed": false
   },
   "notVerified": [
     "Natural AgentRouter invalid_encrypted_content fault or its recent frequency",
-    "This revision on Windows/Linux CI",
     "Installed Codex or Claude Code encrypted-failure end-to-end continuation",
     "Full Harness GUI and all client versions",
     "All models accepting summary-only reasoning, all history types or sustained load"
