@@ -111,13 +111,18 @@ test('JSON empty and max-token incomplete responses are not replayed', async t =
   }
 });
 
-test('Messages conversion is opt-in and ordinary messages continue to pass through', async t => {
+test('explicit passthrough keeps ordinary Messages without conversion', async t => {
   const f = await fixture(t, (_req, res) => {
     res.writeHead(200, { 'content-type': 'application/json' });
     res.end('{"content":[]}');
-  });
-  await request(f.address, '/v1/messages', { model: 'mock', messages: [], max_tokens: 20 });
+  }, { upstreamProtocol: 'passthrough' });
+  const body = { model: 'mock', messages: [], max_tokens: 20 };
+  const result = await request(f.address, '/v1/messages', body);
   assert.equal(f.received[0].url, '/v1/messages');
+  assert.deepEqual(f.received[0].body, Buffer.from(JSON.stringify(body)));
+  assert.equal(f.received[0].headers['x-api-key'], 'MOCK');
+  assert.equal(result.status, 200);
+  assert.equal(result.body, '{"content":[]}');
 });
 
 test('Claude Messages can consume a Responses terminal-only payload', async t => {

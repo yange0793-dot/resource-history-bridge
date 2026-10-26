@@ -489,7 +489,6 @@ for (const [name, prefix, tail] of [
   ['tool output', frame({ type: 'response.output_item.added', item: { type: 'function_call', name: 'add', call_id: 'emitted', arguments: '' } }), ''],
   ['unknown event', frame({ type: 'response.future_event', unknown: true }), ''],
   ['unknown raw prefix', 'not-an-sse-frame\n\n', ''],
-  ['comment prefix', ': synthetic heartbeat\n\n', ''],
   ['unknown tail', '', 'unknown trailing bytes'],
   ['partial tail', '', 'data: {"type":"response.output_text.delta","delta":"']
 ]) test(`native Codex ${name} is an exact no-replay boundary`, async t => {
@@ -502,6 +501,20 @@ for (const [name, prefix, tail] of [
   assert.equal(result.text, original);
   assert.equal(f.requests.length, 1);
   assert.deepEqual(f.requests[0].bytes, raw);
+});
+
+test('native Codex comment only prefix stays recoverable metadata', async t => {
+  const raw = Buffer.from(JSON.stringify(freeze(mixedHistory()), null, 2));
+  const failure = frame({ type: 'response.failed', response: { status: 'failed', output: [], error: { type: 'invalid_request_error', message: resourceMessage } } });
+  const original = lifecycle + ': synthetic heartbeat\n\n' + failure;
+  const f = await fixture(t, (_req, res) => send(res, 200, original), { automaticRecovery: true, generic400Projection: false });
+  assert.equal((await post(f.address, raw)).text, original);
+  // The heartbeat is transport metadata; the resource failure behind it still
+  // uses the shared ten-call budget. The first attempt is the caller's exact
+  // bytes and every later attempt reuses one identical projected copy.
+  assert.equal(f.requests.length, 10);
+  assert.deepEqual(f.requests[0].bytes, raw);
+  for (const received of f.requests.slice(1)) assert.deepEqual(received.bytes, f.requests[1].bytes);
 });
 
 test('native Codex complete terminal followed by delayed unknown bytes never replays', async t => {

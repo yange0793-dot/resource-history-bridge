@@ -1,0 +1,92 @@
+{
+  "date": "2026-10-26",
+  "baseRevision": "9f9664de2159701c050014cd1127f903802a2e5f",
+  "scope": "AgentRouter-only native Responses recovery for explicit invalid_encrypted_content, with one lossy encrypted-reasoning downgrade before output and the existing shared budget.",
+  "activation": {
+    "officialHosts": ["agentrouter.org", "ps.air-outer.com"],
+    "protocol": "https",
+    "endpoint": "responses",
+    "explicitCode": "invalid_encrypted_content",
+    "httpStatuses": "400 or successful HTTP status with a complete structured error",
+    "extraDeclarationOrSwitch": false,
+    "otherTargets": "unchanged passthrough"
+  },
+  "projection": {
+    "firstRequestUnchangedByDefault": true,
+    "onlyRemoves": "reasoning encrypted_content and the corresponding reasoning id; omits opaque-only reasoning items",
+    "preservesReadableSummaryAndContent": true,
+    "preservesOtherItemIdsAndToolPairing": true,
+    "preservesModelEffortAuthSessionCacheStoreInclude": true,
+    "doesNotModifyOriginalRequestOrPersistentHistory": true,
+    "lossy": true,
+    "maximumDowngradesPerHttpRequest": 1,
+    "sharedExistingBudgetDeadlineAndCancellation": true,
+    "marker": "x-rhb-recovery: encrypted-reasoning-dropped",
+    "refuses": ["server references", "item_reference", "compaction/context_compaction", "other encrypted item types", "unknown or incomplete history", "unpaired tools", "output or unknown bytes", "partial or truncated response", "committed response", "buffer overflow"],
+    "doesNotDecryptOrForgeSignature": true,
+    "noInventedSseCompletionOrUsage": true
+  },
+  "runtimeAndTestHashes": {
+    "index.js": "ebb42d174f005a79f68d16dfd21db11aafa7f0696c7e3427782ac71b053b6523",
+    "lib/agentrouter.js": "61fb2002dab7b36bdfccffe37806a9d60243b637a59f5cb2721059a72f8271c0",
+    "lib/history.js": "1cc3ddbe0ad31740736f27197a5de1032b5981344bead3d89742a3ba94bb0ee4",
+    "lib/encrypted-reasoning.js": "5d0e364e524d71bccc7e758955f3fb48817e6bd6a804a2abfeedb8949d49555f",
+    "lib/recovery.js": "038753f42dae186ab429fecf4239b37d52e5d4a3c02d9c9b7747f199aed8992b",
+    "lib/bridge.js": "d9e0230393213f95345b275772040d93231b1ba13e78eb867a55565a77d78a94",
+    "lib/diagnostics.js": "f8a93e4f470affc9a44af88cda66d751b9a38e39f663e25a0db01906c2f56b20",
+    "test/encrypted-reasoning.test.js": "7e77fafdaf6d305aaeceed91e7540b23fabcac045c12e8e88a3fba95f2eabf61"
+  },
+  "unchangedDuringVerification": true,
+  "localMacOS": [
+    {"node": "18.20.8", "tests": 1078, "pass": 1078, "fail": 0, "skip": 0, "cancelled": 0},
+    {"node": "22.23.3", "tests": 1078, "pass": 1078, "fail": 0, "skip": 0, "cancelled": 0},
+    {"node": "24.18.0", "tests": 1078, "pass": 1078, "fail": 0, "skip": 0, "cancelled": 0}
+  ],
+  "focusedEncryptedSuite": {"node": "24.18.0", "tests": 132, "pass": 132, "fail": 0, "skip": 0, "cancelled": 0},
+  "installedHarnessRegression": [
+    {"probe": "parity", "checks": 71, "pass": true, "listenersAndSocketsClosed": true},
+    {"probe": "full", "checks": 91, "pass": true, "listenersAndSocketsClosed": true}
+  ],
+  "installedHarnessEncrypted": {
+    "clientSeam": "Installed PiAiAdapter Config/apply/PiAiAdapter native two-turn tool continuation",
+    "fault": "Synthetic invalid_encrypted_content against loopback mock",
+    "cases": ["readable summary plus ciphertext", "opaque-only reasoning"],
+    "checks": 25,
+    "pass": true,
+    "clientRequestsPerRecovery": 1,
+    "bridgeAttemptsPerRecovery": 2,
+    "callerHistoryUnchanged": true,
+    "exactProjectionAndOptionalToolArgumentsPreserved": true,
+    "installedAdapterUnchanged": true,
+    "installedAdapterHash": "cc4671266af974c4e78bcf0c65f5ef7651ca858ae5017392b1252dd4c2f234b5",
+    "listenersAndSocketsClosed": true,
+    "sameVersionEvidenceReused": true,
+    "evidenceHash": "c6a1e8dad0b06b2a4ef61b0f46cbb27ef6e1049311a1b1772926530e79ce5cb6",
+    "probeHash": "a28e7a528b647a968706fa0616c51e8b5a148681a7edeba613d5adc0a708ca26"
+  },
+  "testTransport": "Official configured URLs are mapped to loopback by a test-only helper before DNS; no real keys, user profiles or user sessions are read.",
+  "realUpstreamCalls": 0,
+  "ci": {
+    "status": "success",
+    "verifiedCommit": "740ff9e6606a6b75d92f84a4d7660ec5b671b8f6",
+    "runId": 40272685786,
+    "url": "https://github.com/yange0793-dot/resource-history-bridge/actions/runs/40272685786",
+    "matrix": "Ubuntu/macOS/Windows x Node18/22/24; all nine jobs passed, including Windows launcher syntax and actual PowerShell5.1 launcher tests",
+    "priorCiIsNotThisRevision": true
+  },
+  "delivery": {
+    "committed": true,
+    "pushed": true,
+    "branch": "feat/encrypted-reasoning-recovery-20261026",
+    "mergedToMain": false,
+    "clientConfigurationsChanged": false,
+    "existingServicesRestarted": false,
+    "localPluginRedeployed": false
+  },
+  "notVerified": [
+    "Natural AgentRouter invalid_encrypted_content fault or its recent frequency",
+    "Installed Codex or Claude Code encrypted-failure end-to-end continuation",
+    "Full Harness GUI and all client versions",
+    "All models accepting summary-only reasoning, all history types or sustained load"
+  ]
+}

@@ -54,6 +54,8 @@ async function main() {
     reasoningShape: process.env.RHB_REASONING_SHAPE,
     historyMode,
     historyStrategy,
+    transparentRecovery: booleanFromEnv('RHB_TRANSPARENT_RECOVERY', historyMode !== 'minimal'),
+    automaticRecovery: booleanFromEnv('RHB_AUTOMATIC_RECOVERY', harness),
     generic400Projection: booleanFromEnv('RHB_GENERIC_400_PROJECTION', harness),
     timeoutMs: numberFromEnv('RHB_TIMEOUT_MS', 180000),
     totalAttempts: numberFromEnv('RHB_TOTAL_ATTEMPTS', 10),
@@ -70,6 +72,7 @@ async function main() {
   const host = address.family === 'IPv6' ? `[${address.address}]` : address.address;
   const authSource = process.env.RHB_API_KEY === undefined ? 'client' : 'bridge override';
   const effectiveProtocol = agentRouterRecovery ? upstreamProtocol : 'passthrough';
+  if (client === 'auto') process.stdout.write('Automatic request adaptation; no client selection required.\n');
   process.stdout.write(`Upstream: ${upstream.origin}\nAgentRouter recovery: ${agentRouterRecovery ? 'enabled' : 'disabled (passthrough)'}\nClient: ${client}; history: ${historyMode}; protocol: ${effectiveProtocol}; auth source: ${authSource}\nresource-history-bridge listening at http://${host}:${address.port}/v1\n`);
   let closing = false;
   const stop = async () => {

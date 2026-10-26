@@ -1,6 +1,6 @@
 # 客户端接入
 
-桥面向同一台电脑上的 Codex、DeepSeek Harness、Claude Code 或其他 API 客户端，固定连接配置的上游，仅对 AgentRouter 启用恢复。其他供应商正常透传，不因为供应商不同而拒绝启动。需要 Node.js ≥18；不安装后台服务、不读取配置管理工具、不自动改客户端设置。
+组件面向同机 API 客户端，固定连接配置的上游，仅对 AgentRouter 启用恢复。默认按请求自动处理，不再选择客户端类型。已有网关可以直接[嵌入恢复核心](architecture.md)，无网关用户可使用自动 HTTP 桥或可选[后台服务](service.md)。其他供应商原协议透传；需要 Node.js ≥18，不读取配置管理工具或自动改客户端设置。
 
 ## 1. 启动桥
 
@@ -18,36 +18,29 @@ bash "/完整路径/resource-history-bridge/scripts/start-macos.command"
 & "C:\完整路径\resource-history-bridge\scripts\start-windows.ps1"
 ```
 
-脚本按自身位置找到 `cli.js`，只询问客户端类型，留空默认 `codex`。已有 `RHB_CLIENT` 或旧 `RHB_HISTORY_MODE` 时不询问；其他显式环境配置继续生效。脚本不询问或保存 key，不修改 PowerShell ExecutionPolicy。如果本机策略禁止脚本，遵循管理员策略，或直接用 Node.js 运行 `cli.js`。
+脚本按自身位置找到 `cli.js`，不询问客户端或协议。显式环境配置继续生效；不询问或保存 key，不修改 PowerShell ExecutionPolicy。如果本机策略禁止脚本，遵循管理员策略，或直接用 Node.js 运行 `cli.js`。
 
-也可在仓库目录直接启动。选好客户端后通常只需这一项：
+也可在仓库目录直接启动：
 
 ```sh
-RHB_CLIENT=codex node cli.js
+node cli.js
 ```
 
 ```powershell
-$env:RHB_CLIENT = 'codex'
 node .\cli.js
 ```
 
-| `RHB_CLIENT` | 历史模式 | 上游协议 | 适用请求 |
-| --- | --- | --- | --- |
-| `codex` | `codex` | `passthrough` | Codex 原生 Responses |
-| `harness` | `harness` | `passthrough` | PiAiAdapter 原生 Responses，含 Harness 连续恢复 |
-| `claude-code` | `minimal` | `responses` | Messages → Responses 转换 |
-| `generic` | `minimal` | `passthrough` | 保守原协议转发 |
+默认自动模式在同一个进程中接受 Responses 和 Messages；原生 Responses 首请求不改写，Messages 在官方 AgentRouter 上按已有适配转换。不靠 User-Agent 或名称选择恢复策略。
 
-直接运行 CLI 而未设置 `RHB_CLIENT`，仍使用 `generic` 的旧兼容默认值；这与交互启动脚本的默认 `codex` 不同。`RHB_HISTORY_MODE`、`RHB_UPSTREAM_PROTOCOL` 等旧显式配置优先于预设，不会被覆盖。
+`RHB_CLIENT=codex/harness/claude-code/generic` 仍是高级兼容覆盖；`RHB_HISTORY_MODE`、`RHB_UPSTREAM_PROTOCOL` 显式值优先。只有旧显式 historyMode 而未指定客户端时仍保留原 generic 预设，避免改变既有协议接线。自动模式不隐式启用 Harness 空响应/泛化 400 恢复。
 
 默认上游是 `https://agentrouter.org/v1`。如需官方备用入口：
 
 ```sh
-RHB_CLIENT=codex RHB_UPSTREAM=https://ps.air-outer.com/v1 node cli.js
+RHB_UPSTREAM=https://ps.air-outer.com/v1 node cli.js
 ```
 
 ```powershell
-$env:RHB_CLIENT = 'codex'
 $env:RHB_UPSTREAM = 'https://ps.air-outer.com/v1'
 node .\cli.js
 ```
@@ -64,7 +57,7 @@ node .\cli.js
 
 ### Codex
 
-桥选 `RHB_CLIENT=codex`。在 Codex 自己管理的 `config.toml` 中选择 provider，保留已有实际模型值：
+桥保持默认自动模式。在 Codex 自己管理的 `config.toml` 中选择 provider，保留已有实际模型值：
 
 ```toml
 model_provider = "local_bridge"
@@ -78,11 +71,11 @@ env_key = "OPENAI_API_KEY"
 
 如果已有 provider，只修改其 `base_url`，不重复创建同名 TOML 表。密钥继续由现有环境管理提供 `OPENAI_API_KEY`，不写进 TOML。配置或客户端环境改变后，从正确环境启动新的 Codex 会话。
 
-`RHB_CLIENT` 是桥的启动设置，不是 Codex 模型名称或 TOML 配置项。Codex 模式只投影已校验的四类 item ID；工具结果必须完整内联并唯一配对，nullable reasoning 原样保留。完整形状见 [Codex 契约](scope.md#codex-历史投影契约)。
+`RHB_CLIENT` 是桥的启动设置，不是 Codex 模型名称或 TOML 配置项。Codex 的历史 ID 模式只投影已校验的四类 item ID；工具结果必须完整内联并唯一配对，nullable reasoning 原样保留。另有仅在明确 `invalid_encrypted_content` 后尝试一次的[有损 reasoning 降级](scope.md#加密-reasoning-解密失败降级)，不主动删除正常密文或压缩历史。完整形状见 [Codex 契约](scope.md#codex-历史投影契约)。
 
 ### Claude Code
 
-桥选 `RHB_CLIENT=claude-code`，客户端 Base URL 不带 `/v1`：
+桥保持默认自动模式，客户端 Base URL 不带 `/v1`：
 
 ```sh
 export ANTHROPIC_BASE_URL=http://127.0.0.1:8790
@@ -94,11 +87,11 @@ $env:ANTHROPIC_BASE_URL = 'http://127.0.0.1:8790'
 
 保留原模型及现有 `ANTHROPIC_API_KEY` / `ANTHROPIC_AUTH_TOKEN` 来源，不复制或重写 key。如果配置管理工具提供 Base URL，修改那个来源，避免终端与配置文件两处值冲突。
 
-该预设把 Messages 转为 AgentRouter Responses，再转回 Messages。原生 Responses 请求仍原协议转发。转换会映射认证、token 上限、effort 和部分身份字段，不能笼统称为无损互转；支持与保留边界见 [Messages 转换](scope.md#messages-转换)。
+默认自动入口按 `/messages` 端点把 Messages 转为 AgentRouter Responses，再转回 Messages。原生 Responses 请求仍原协议转发；这类请求的明确密文解密错误可按[降级规则](scope.md#加密-reasoning-解密失败降级)恢复。Claude Code 的 Messages thinking.signature 不等同于 Responses encrypted_content，本规则不把普通签名错误当成密文故障，也不修改签名来伪造有效历史。转换会映射认证、token 上限、effort 和部分身份字段，不能笼统称为无损互转；支持与保留边界见 [Messages 转换](scope.md#messages-转换)。
 
 ### DeepSeek Harness
 
-桥选 `RHB_CLIENT=harness`。在当前 AgentRouter provider 中设置：
+桥保持默认自动模式即可恢复约定的资源/密文错误。在当前 AgentRouter provider 中设置：
 
 - **Base URL**：`http://127.0.0.1:8790/v1`。
 - **协议**：`openai-responses`。
@@ -119,7 +112,7 @@ $env:ANTHROPIC_BASE_URL = 'http://127.0.0.1:8790'
 
 `supportsStrictMode: true` 使 PiAiAdapter 可以显式发送 `strict: false`，不是开启严格工具模式。不填时部分 Responses 上游会默认严格化工具 schema，使可选参数变为必填。不要删除其他 compat 配置，也不要写 `config: !!js`。
 
-Harness 模式适配 PiAiAdapter 的原生历史，不修改持久 replayState、签名或 backfill；恢复只在请求副本上进行。原生 `/responses` 另有共享预算的瞬时错误与明确空终态恢复，耗尽后仍返回实际最后响应，客户端仍可能报告原生 `EMPTY_RESPONSE`。其他客户端空完成策略不因此改变。见 [Harness 契约](scope.md#harness-历史投影契约)。
+Harness 模式适配 PiAiAdapter 的原生历史，不修改持久 replayState、签名或 backfill；恢复只在请求副本上进行。明确的 `invalid_encrypted_content` 还可触发一次有损 reasoning 降级，保留可读摘要与完整工具历史，并以响应 header 标记；不能重建的压缩历史不删，见 [降级范围](scope.md#加密-reasoning-解密失败降级)。如需原有瞬时错误与明确空终态连续恢复，可显式使用 `RHB_CLIENT=harness`；这不是自动识别的结果。耗尽后仍返回实际最后响应，客户端仍可能报告原生 `EMPTY_RESPONSE`。其他客户端空完成策略不因此改变。见 [Harness 契约](scope.md#harness-历史投影契约)。
 
 原生 DeepSeek API / `openai-completions` 不是 Responses。配置为其他供应商时本桥只做原协议透传，不启用 AgentRouter 的历史投影或连续恢复；Chat Completions 只有原协议转发能力。
 
@@ -127,13 +120,13 @@ Harness 模式适配 PiAiAdapter 的原生历史，不修改持久 replayState�
 
 只修改工具自己管理的客户端/provider 的 API Base URL 或 endpoint：
 
-| 客户端协议 | 本机地址 | 桥预设 |
+| 客户端 | 本机地址 | 桥设置 |
 | --- | --- | --- |
-| Codex / Responses | `http://127.0.0.1:8790/v1` | `codex` |
-| Harness / `openai-responses` | `http://127.0.0.1:8790/v1` | `harness` |
-| Claude Code / Messages | `http://127.0.0.1:8790` | `claude-code` |
+| Codex | `http://127.0.0.1:8790/v1` | 默认自动 |
+| Harness | `http://127.0.0.1:8790/v1` | 默认自动 |
+| Claude Code | `http://127.0.0.1:8790` | 默认自动 |
 
-管理工具若只是保存配置，不需要把它变成桥的依赖。若它本身代理或转换请求，桥应放在实际 Responses 链上，并按桥收到的协议选择模式；不能插在 Chat 路径上却期待恢复 Responses 历史。
+管理工具若只是保存配置，不需要把它变成桥的依赖。若它本身代理或转换请求，优先把恢复核心嵌到实际上游已确定的出站层；不需要再维护 HTTP 桥。独立桥按收到的端点处理，但不能插在 Chat 路径上却期待恢复 Responses 历史。
 
 客户端或 SDK 如果自动补 `/v1`，填根地址 `http://127.0.0.1:8790`，避免重复路径。具体字段位置取决于工具版本，本文不假定某个按钮存在，也不声称所有管理工具已实测。
 
@@ -154,7 +147,7 @@ Harness 模式适配 PiAiAdapter 的原生历史，不修改持久 replayState�
 
 可把 `RHB_UPSTREAM` 固定为已有 loopback 代理的 Base URL，此时只做原协议透传。客户端不能在请求 URL 或正文中选择上游。
 
-只有实际发往两个 HTTPS 官方主机的请求才启用恢复，包括 [严格 AgentRouter 400 历史包装](scope.md#严格-agentrouter-历史错误)。即使本机代理最终连接官方入口，桥也不会凭客户端/代理 header 或错误内容猜测其身份；不启用投影、Harness 连续恢复或 Messages 转换。需要代理链内恢复时，应由能识别实际出站目标的代理实现。
+只有实际发往两个 HTTPS 官方主机的请求才启用恢复，包括 [严格 AgentRouter 400 历史包装](scope.md#严格-agentrouter-历史错误)。即使本机代理最终连接官方入口，桥也不会凭客户端/代理 header 或错误内容猜测其身份；不启用投影、Harness 连续恢复或 Messages 转换。需要代理链内恢复时，应由能识别实际出站目标的代理调用 `createRecoverySession`；见[嵌入边界](architecture.md)。核心不启第二个监听，也不会自行读取或修改网关配置。
 
 ## 停止与安全
 

@@ -12,15 +12,6 @@ try {
         throw 'Node.js 18 or newer is required.'
     }
 
-    if (-not (Test-Path Env:RHB_CLIENT) -and -not (Test-Path Env:RHB_HISTORY_MODE)) {
-        Write-Host 'Client codex / harness / claude-code / generic [codex]'
-        $client = Read-Host
-        if ([string]::IsNullOrEmpty($client)) {
-            $client = 'codex'
-        }
-        $env:RHB_CLIENT = $client
-    }
-
     Write-Host 'Existing client credentials are forwarded by default. No keys are prompted for or saved; no client configuration is changed.'
     Write-Host 'The bridge runs in the foreground. Press Ctrl+C to stop listening.'
     & $nodeBin (Join-Path $rootDir 'cli.js')

@@ -140,7 +140,7 @@ try {
   restoreTransport = mockAgentRouter(upstream.address().port);
   const upstreamUrl = 'https://agentrouter.org/v1';
   bridge = createBridge({ upstream: upstreamUrl, historyMode: 'harness', retryDelayMs: 0, retryJitterRatio: 0, timeoutMs: 10000 });
-  legacyBridge = createBridge({ upstream: upstreamUrl, historyMode: 'harness', automaticRecovery: false, timeoutMs: 10000 });
+  legacyBridge = createBridge({ upstream: upstreamUrl, historyMode: 'harness', automaticRecovery: false, transparentRecovery: false, timeoutMs: 10000 });
   const address = await bridge.listen(0);
   const legacy = await legacyBridge.listen(0);
   const origins = new Set([`http://127.0.0.1:${address.port}`, `http://127.0.0.1:${legacy.port}`]);

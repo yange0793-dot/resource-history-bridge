@@ -185,13 +185,21 @@ for (const prefix of [
   frame('response.output_item.added', { item: { type: 'function_call', name: 'Read', call_id: 'c', arguments: '' } }),
   frame('response.function_call_arguments.delta', { delta: ' ' }),
   frame('future.event', { payload: 'unknown' }),
-  'unknown raw bytes',
-  ': ping\n\n'
+  'unknown raw bytes'
 ]) test('any output/unknown bytes block retry even when followed by empty or overload failure', async t => {
   const original = lifecycle + prefix + emptyFailed;
   const f = await fixture(t, (_req, res) => send(res, 200, original, 'text/event-stream'));
   assert.equal((await post(f.address)).text, original);
   assert.equal(f.requests.length, 1);
+});
+
+test('a comment-only heartbeat is metadata, so the later empty failure is still evaluated', async t => {
+  const original = lifecycle + ': ping\n\n' + emptyFailed;
+  // Harness default keeps its legacy bounded empty recovery; the heartbeat must
+  // not turn that into a replay barrier, so the legacy 3-call budget still runs.
+  const f = await fixture(t, (_req, res) => send(res, 200, original, 'text/event-stream'));
+  assert.equal((await post(f.address)).text, original);
+  assert.equal(f.requests.length, 3);
 });
 
 for (const output of [
@@ -443,7 +451,8 @@ for (const mode of ['minimal', 'codex']) test(`${mode} default keeps transient/e
   for (const [status, original, type] of [[429, '{"error":{"type":"rate_limit_error"}}', 'application/json'], [200, emptyCompleted, 'text/event-stream']]) {
     const f = await fixture(t, (_req, res) => send(res, status, original, type), { historyMode: mode });
     assert.equal((await post(f.address)).text, original);
-    assert.equal(f.requests.length, 1);
+    const expected = mode === 'codex' && status === 429 ? 3 : 1;
+    assert.equal(f.requests.length, expected);
   }
 });
 
