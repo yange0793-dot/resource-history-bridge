@@ -12,22 +12,13 @@ try {
         throw 'Node.js 18 or newer is required.'
     }
 
-    if ([string]::IsNullOrEmpty($env:RHB_UPSTREAM)) {
-        $env:RHB_UPSTREAM = Read-Host 'Upstream API Base URL (e.g. https://api.example.com/v1; never enter a key)'
-        if ([string]::IsNullOrEmpty($env:RHB_UPSTREAM)) {
-            throw 'Upstream URL is required.'
+    if (-not (Test-Path Env:RHB_CLIENT) -and -not (Test-Path Env:RHB_HISTORY_MODE)) {
+        Write-Host 'Client codex / harness / claude-code / generic [codex]'
+        $client = Read-Host
+        if ([string]::IsNullOrEmpty($client)) {
+            $client = 'codex'
         }
-    }
-
-    if ([string]::IsNullOrEmpty($env:RHB_UPSTREAM_PROTOCOL)) {
-        Write-Host 'Messages protocol: responses = convert to Responses (AgentRouter); passthrough = forward unchanged.'
-        $env:RHB_UPSTREAM_PROTOCOL = Read-Host 'Choose responses / passthrough [responses]'
-        if ([string]::IsNullOrEmpty($env:RHB_UPSTREAM_PROTOCOL)) {
-            $env:RHB_UPSTREAM_PROTOCOL = 'responses'
-        }
-    }
-    if ($env:RHB_UPSTREAM_PROTOCOL -cne 'responses' -and $env:RHB_UPSTREAM_PROTOCOL -cne 'passthrough') {
-        throw 'Unsupported upstream protocol.'
+        $env:RHB_CLIENT = $client
     }
 
     Write-Host 'Existing client credentials are forwarded by default. No keys are prompted for or saved; no client configuration is changed.'
@@ -37,6 +28,6 @@ try {
     exit $exitCode
 }
 catch {
-    Write-Host 'Startup did not complete. Check Node.js >=18, RHB_UPSTREAM, the protocol selection and local execution permissions. No service or execution policy was changed.'
+    Write-Host 'Startup did not complete. Check Node.js >=18, RHB_CLIENT, the AgentRouter upstream, port and local execution permissions. No service or execution policy was changed.'
     exit 1
 }

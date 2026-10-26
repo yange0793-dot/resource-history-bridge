@@ -692,12 +692,12 @@ test('HTTP400 mislabeled JSON unverified message ID still refuses recovery', asy
 
 test('rejects non-loopback binding and unsafe upstream URLs', () => {
   for (const options of [
-    { upstream: 'http://example.com/v1', host: '0.0.0.0' },
-    { upstream: 'http://user:password@example.com/v1' },
-    { upstream: 'http://example.com/v1?key=secret' },
-    { upstream: 'http://example.com/v1#fragment' },
+    { upstream: 'https://agentrouter.org/v1', host: '0.0.0.0' },
+    { upstream: 'https://user:password@agentrouter.org/v1' },
+    { upstream: 'https://agentrouter.org/v1?key=secret' },
+    { upstream: 'https://agentrouter.org/v1#fragment' },
     { upstream: 'file:///tmp/local' },
-    { upstream: 'http://example.com/v1', bufferLimit: 65537 },
-    { upstream: 'http://example.com/v1', apiKey: 'MOCK\r\nINJECTION' }
+    { upstream: 'https://agentrouter.org/v1', bufferLimit: 65537 },
+    { upstream: 'https://agentrouter.org/v1', apiKey: 'MOCK\r\nINJECTION' }
   ]) assert.throws(() => createBridge(options));
 });

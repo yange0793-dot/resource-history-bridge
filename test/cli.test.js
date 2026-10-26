@@ -10,6 +10,12 @@ const { spawn, spawnSync } = require('node:child_process');
 
 const cli = path.join(__dirname, '..', 'cli.js');
 
+function cleanEnv(extra = {}) {
+  const env = { ...process.env };
+  for (const name of Object.keys(env)) if (/^RHB_/i.test(name)) delete env[name];
+  return { ...env, ...extra };
+}
+
 async function unusedPort() {
   const server = net.createServer();
   server.listen(0, '127.0.0.1');
@@ -31,7 +37,7 @@ test('CLI starts via env, relays mock request and SIGTERM closes listener', asyn
   t.after(() => new Promise(resolve => upstream.close(resolve)));
   const port = await unusedPort();
   const child = spawn(process.execPath, [cli], {
-    env: { ...process.env, RHB_UPSTREAM: `http://127.0.0.1:${upstream.address().port}/v1`, RHB_PORT: String(port), RHB_API_KEY: 'MOCK_CLI_KEY', RHB_HISTORY_MODE: 'harness' },
+    env: cleanEnv({ RHB_UPSTREAM: `http://127.0.0.1:${upstream.address().port}/v1`, RHB_PORT: String(port), RHB_API_KEY: 'MOCK_CLI_KEY', RHB_HISTORY_MODE: 'harness' }),
     stdio: ['ignore', 'pipe', 'pipe']
   });
   t.after(() => { if (child.exitCode === null) child.kill('SIGKILL'); });
@@ -66,6 +72,8 @@ test('CLI starts via env, relays mock request and SIGTERM closes listener', asyn
   assert.equal(child.exitCode !== null || child.signalCode !== null, true);
   assert.equal(errors, '');
   assert.equal(output.includes('MOCK_CLI_KEY'), false);
+  assert.match(output, new RegExp(`AgentRouter upstream: http://127\\.0\\.0\\.1:${upstream.address().port}\\n`));
+  assert.match(output, /Client: generic; history: harness; protocol: passthrough; auth source: bridge override/);
   await assert.rejects(new Promise((resolve, reject) => {
     const socket = net.connect(port, '127.0.0.1');
     socket.on('connect', () => { socket.destroy(); resolve(); });
@@ -82,7 +90,7 @@ test('CLI rejects invalid recovery and conversion options without exposing value
     { RHB_REASONING_SHAPE: 'unknown' },
     { RHB_USER_AGENT: 'bad\r\nheader' }
   ]) {
-    const result = spawnSync(process.execPath, [cli], { env: { ...process.env, RHB_UPSTREAM: 'http://127.0.0.1:1/v1', ...env }, encoding: 'utf8', timeout: 2000 });
+    const result = spawnSync(process.execPath, [cli], { env: cleanEnv({ RHB_UPSTREAM: 'http://127.0.0.1:1/v1', ...env }), encoding: 'utf8', timeout: 2000 });
     assert.equal(result.status, 1);
     assert.equal(result.stdout, '');
     assert.doesNotMatch(result.stderr, /bad\r\nheader/);
@@ -92,7 +100,7 @@ test('CLI rejects invalid recovery and conversion options without exposing value
 test('CLI accepts no argv and does not expose unsafe URL or keys on startup error', () => {
   for (const args of [[], ['--api-key', 'MOCK_ARG_SECRET']]) {
     const result = spawnSync(process.execPath, [cli, ...args], {
-      env: { ...process.env, RHB_UPSTREAM: 'http://MOCK_USER:MOCK_URL_SECRET@127.0.0.1/v1', RHB_API_KEY: 'MOCK_ENV_SECRET' },
+      env: cleanEnv({ RHB_UPSTREAM: 'http://MOCK_USER:MOCK_URL_SECRET@127.0.0.1/v1', RHB_API_KEY: 'MOCK_ENV_SECRET' }),
       encoding: 'utf8', timeout: 2000
     });
     assert.equal(result.status, 1);

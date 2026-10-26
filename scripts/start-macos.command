@@ -17,28 +17,14 @@ if [[ ! "$NODE_MAJOR" =~ ^[0-9]+$ ]] || (( NODE_MAJOR < 18 )); then
   exit 1
 fi
 
-if [[ -z "${RHB_UPSTREAM:-}" ]]; then
-  printf '%s' '上游 API Base URL（例如 https://api.example.com/v1，不要填密钥）: '
-  if ! IFS= read -r RHB_UPSTREAM || [[ -z "$RHB_UPSTREAM" ]]; then
-    printf '%s\n' '没有提供上游地址，已退出。' >&2
+if [[ -z "${RHB_CLIENT+x}" && -z "${RHB_HISTORY_MODE+x}" ]]; then
+  printf '%s' '客户端 codex / harness / claude-code / generic [codex]: '
+  if ! IFS= read -r RHB_CLIENT; then
+    printf '%s\n' '无法读取客户端选择，已退出。' >&2
     exit 1
   fi
+  RHB_CLIENT="${RHB_CLIENT:-codex}"
+  export RHB_CLIENT
 fi
-
-if [[ -z "${RHB_UPSTREAM_PROTOCOL:-}" ]]; then
-  printf '%s\n' 'Messages 上游协议：responses = 转为 Responses（AgentRouter 目标）；passthrough = 原样转发。'
-  printf '%s' '选择 responses / passthrough [responses]: '
-  if ! IFS= read -r RHB_UPSTREAM_PROTOCOL; then
-    printf '%s\n' '无法读取协议选择，已退出。' >&2
-    exit 1
-  fi
-  RHB_UPSTREAM_PROTOCOL="${RHB_UPSTREAM_PROTOCOL:-responses}"
-fi
-if [[ "$RHB_UPSTREAM_PROTOCOL" != 'responses' && "$RHB_UPSTREAM_PROTOCOL" != 'passthrough' ]]; then
-  printf '%s\n' 'RHB_UPSTREAM_PROTOCOL 只能为 responses 或 passthrough。' >&2
-  exit 1
-fi
-
-export RHB_UPSTREAM RHB_UPSTREAM_PROTOCOL
 printf '%s\n' '默认透传客户端原有密钥；本脚本不询问或保存密钥，不修改客户端配置。' '桥将在前台运行。按 Ctrl+C 停止监听。'
 exec "$NODE_BIN" "$ROOT_DIR/cli.js"

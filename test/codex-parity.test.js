@@ -450,10 +450,13 @@ for (const mode of ['codex', 'harness']) {
     ['malformed raw JSON', '{"error":broken', undefined, 400],
     ['partial data frame', `data: ${JSON.stringify(scopedPayload())}`, undefined, 400]
   ]) test(`${mode} strict scope barrier ${name} preserves exact response and request bytes`, async t => {
+    if (upstream) {
+      assert.throws(() => createBridge({ upstream, historyMode: mode }), TypeError);
+      return;
+    }
     const raw = Buffer.from(JSON.stringify(freeze(mixedHistory()), null, 2));
     const f = await fixture(t, (_req, res) => send(res, status, error), {
-      historyMode: mode, automaticRecovery: true, generic400Projection: false,
-      ...(upstream ? { upstream } : {})
+      historyMode: mode, automaticRecovery: true, generic400Projection: false
     });
     const result = await post(f.address, raw);
     assert.equal(result.status, status);
@@ -515,6 +518,29 @@ test('native Codex complete terminal followed by delayed unknown bytes never rep
   assert.equal((await post(f.address, raw)).text, terminal + 'unknown tail');
   assert.equal(f.requests.length, 1);
   assert.deepEqual(f.requests[0].bytes, raw);
+});
+
+test('official AgentRouter scoped recovery follows client key rotation between requests, not during replay', async t => {
+  const original = freeze(mixedHistory());
+  const raw = Buffer.from(JSON.stringify(original, null, 2));
+  const counts = new Map();
+  const f = await fixture(t, (req, res) => {
+    const key = req.headers.authorization;
+    const attempt = (counts.get(key) || 0) + 1;
+    counts.set(key, attempt);
+    send(res, attempt === 1 ? 400 : 200, attempt === 1 ? JSON.stringify(scopedPayload()) : success);
+  });
+  for (const key of ['SYNTHETIC_KEY_A', 'SYNTHETIC_KEY_B']) {
+    const result = await post(f.address, raw, { authorization: `Bearer ${key}` });
+    assert.equal(result.status, 200);
+    assert.equal(result.text, success);
+  }
+  assert.deepEqual(f.requests.map(entry => entry.headers.authorization), [
+    'Bearer SYNTHETIC_KEY_A', 'Bearer SYNTHETIC_KEY_A', 'Bearer SYNTHETIC_KEY_B', 'Bearer SYNTHETIC_KEY_B'
+  ]);
+  const projected = Buffer.from(JSON.stringify(expectedProjection(original)));
+  assert.deepEqual(f.requests.map(entry => entry.bytes), [raw, projected, raw, projected]);
+  assert.ok(f.requests.every(entry => entry.headers['x-session-id'] === headers['x-session-id']));
 });
 
 test('standalone bridge loads and listens with all external project dependencies rejected', () => {
