@@ -154,8 +154,11 @@ test('Messages with no removable IDs can replay unchanged converted history on a
 
 test('request deadline cancels retry delay without issuing another upstream call', async t => {
   // Transparent recovery relays the actual last upstream response, so the client
-  // sees the real 400 rather than a synthetic gateway timeout.
-  const f = await fixture(t, res => send(res, 400, error), { timeoutMs: 60, retryDelayMs: 1000 });
+  // sees the real 400 rather than a synthetic gateway timeout. The budget must
+  // stay far larger than one loopback round trip, or a busy machine decides this
+  // test by timing out mid-request instead of by the retry delay exceeding what
+  // is left; the delay still exceeds the budget, so the branch is unchanged.
+  const f = await fixture(t, res => send(res, 400, error), { timeoutMs: 1000, retryDelayMs: 1000 });
   const result = await post(f.address);
   assert.equal(result.status, 400);
   assert.equal(result.text, error);

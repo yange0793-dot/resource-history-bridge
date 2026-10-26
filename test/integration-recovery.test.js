@@ -269,7 +269,10 @@ test('Retry-After respects longest server hint via injected clock/sleep', async 
 
 test('Retry-After exceeding deadline immediately relays actual error', async t => {
   const original = '{"error":{"type":"rate_limit_error"}}';
-  const f = await fixture(t, (_req, res) => send(res, 429, original, 'application/json', { 'retry-after': '10' }), { timeoutMs: 40 });
+  // The real deadline timer needs far more room than one loopback round trip, so
+  // that the branch under test (a server hint longer than the remaining budget)
+  // is decided by the hint and not by how slow the machine was this run.
+  const f = await fixture(t, (_req, res) => send(res, 429, original, 'application/json', { 'retry-after': '10' }), { timeoutMs: 1000 });
   const result = await post(f.address);
   assert.equal(result.status, 429);
   assert.equal(result.text, original);
@@ -469,7 +472,13 @@ test('legacy non-Harness configuration preserves wider Azure retry bounds', asyn
 });
 
 test('retry that stalls under shared deadline does not relay an older attempt', async t => {
-  const f = await fixture(t, (_req, res, n) => { if (n === 1) send(res, 503, '{"error":{"type":"server_error"}}'); }, { timeoutMs: 45 });
+  // Which branch this exercises depends on one fact: whether a later attempt was
+  // actually sent. A frozen recovery clock pins that fact (the retry-loop deadline
+  // check cannot trip), and the real timer — not machine speed — then aborts the
+  // stalled second attempt. Relying on the round trip staying under 45 ms instead
+  // made the outcome a coin flip under load.
+  const f = await fixture(t, (_req, res, n) => { if (n === 1) send(res, 503, '{"error":{"type":"server_error"}}'); },
+    { timeoutMs: 45, now: () => 1000 });
   const result = await post(f.address);
   assert.equal(result.status, 504);
   assert.equal(f.requests.length, 2);
