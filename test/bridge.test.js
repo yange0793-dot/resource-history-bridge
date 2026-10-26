@@ -36,7 +36,7 @@ async function fixture(t, handler, options = {}) {
   upstream.listen(0, '127.0.0.1');
   await once(upstream, 'listening');
   t.after(mockAgentRouter(upstream.address().port));
-  const bridge = createBridge({ upstream: 'https://agentrouter.org/v1', timeoutMs: 2000, resourceAttempts: 2, retryDelayMs: 0, ...options });
+  const bridge = createBridge({ upstream: 'https://agentrouter.org/v1', historyMode: 'minimal', upstreamProtocol: 'passthrough', timeoutMs: 2000, resourceAttempts: 2, retryDelayMs: 0, ...options });
   const address = await bridge.listen(0);
   t.after(async () => {
     await bridge.close();

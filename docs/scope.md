@@ -14,20 +14,31 @@
 
 接受 JSON POST `/responses`、`/responses/compact`、`/chat/completions`、`/messages`，也接受这些路径的 `/v1` 前缀。Messages 固定 `?beta=true` 路径可接受：AgentRouter 转换路径不把它传给 Responses，其他目标的 Messages 透传保留该 query；其他 query 不接受。Chat Completions 仅透传；compact 不参与资源或空输出恢复。
 
-## 客户端预设与兼容性
+## 自动入口与兼容覆盖
 
-`RHB_CLIENT` 是 CLI 的便利预设，不是客户端模型名称，也不是 provider ID：
+CLI 与未设置模式的 `createBridge` 默认 `historyMode:auto`、`upstreamProtocol:auto`，无需客户端选择。按请求端点分派，原生 Responses 按严格实际历史形状校验；Messages 在官方 AgentRouter 上使用已有 Messages → Responses 适配。其他目标始终原协议透传。自动适配不猜测未知供应商能力，也不通过 User-Agent 启用策略。
+
+旧显式配置仍保留。`RHB_CLIENT` 是兼容预设，不是客户端模型名称或 provider ID：
 
 | 预设 | `historyMode` | `upstreamProtocol` |
 | --- | --- | --- |
+| `auto`（默认） | `auto` | `auto` |
 | `codex` | `codex` | `passthrough` |
 | `harness` | `harness` | `passthrough` |
 | `claude-code` | `minimal` | `responses` |
 | `generic` | `minimal` | `passthrough` |
 
-直接 CLI 未设置该变量时使用 `generic` 兼容默认值。交互启动脚本在 `RHB_CLIENT` 和旧 `RHB_HISTORY_MODE` 都未设置时，仅询问客户端类型、留空默认 `codex`。旧显式 `RHB_HISTORY_MODE`、`RHB_UPSTREAM_PROTOCOL` 及其他环境选项优先于预设，不能把预设名当成“必然启用转换”而忽略旧覆盖。
+CLI 和启动脚本都不询问客户端。未设置模式时统一默认 auto；仅有旧显式 `RHB_HISTORY_MODE=minimal/codex/harness` 时仍采用 generic 的旧协议默认值。库中显式旧 historyMode 且未指定协议时也保留 passthrough。显式 `RHB_HISTORY_MODE`、`RHB_UPSTREAM_PROTOCOL` 及其他选项优先，不能把预设名当成必然行为而忽略覆盖。纯 `projectResponsesHistory` / `projectEncryptedReasoning` 的无选项默认仍为 minimal；需要自动契约时显式 `{mode:'auto'}`。
 
 启动信息仅显示脱敏上游、自动识别的恢复启用状态、历史预设、实际协议、认证来源与监听地址，不输出凭据。非 AgentRouter 目标实际协议始终为 passthrough，所显示的历史预设不代表投影已启用。桥不自动读取或改写客户端/管理工具的配置，不管理模型池、effort、计费或渠道选择。
+
+### 自动历史契约
+
+自动原生 Responses 校验完整显式 input，不根据客户端名称选择模式。标准 message 需要已知 role、phase 与完整内联数组；无 type 的 user/developer/system 消息支持字符串或完整内联数组；reasoning 需要完整 summary 与可选 nullable content。标准/custom 工具调用结果严格按 call_id、类型、顺序唯一配对，additional_tools 使用完整内联 schema。已有 custom/additional ID 保留，ID 可缺省。
+
+资源 ID 投影只移除校验过的 message/reasoning/function_call/function_call_output 顶层 ID；明文、密文、其他字段和请求身份保持。未知类型或字段即使没有 ID 也不能通过；服务端引用、压缩项、file_id、不完整历史和未完成状态不靠猜测恢复。校验拒绝时自动桥保留实际最后上游错误，不生成原有 minimal 的本地 409。
+
+这个契约只决定历史怎样校验，不启用空终态、瞬时或泛化 400 重试。旧显式 harness 连续恢复策略保持独立。自动 additional_tools 的 schema 外层只接受当前明确支持的字段；如带 defer_loading 等未核字段，首请求不受影响，但错误后拒绝投影并保留实际上游错误。
 
 ## 资源恢复与提交边界
 
@@ -43,7 +54,7 @@
 
 任何正文（包括空格）、推理、工具、未知内容或下游提交后都不整轮重放；未知/坏帧、部分尾帧、缓冲超限不能触发恢复。转换截断或不能表达的内容如实报错。失败不伪装为空答或成功终态。
 
-`generic` / `codex` / Messages 默认资源预算为单个输入 HTTP 请求最多 10 次上游调用、1 秒固定间隔、共用 180 秒总时限与取消信号。只重复约定资源错误；不因普通限流、认证、schema、内容过滤或空完成盲重放。耗尽返回实际最后上游错误；若没有可转发的响应，则呈现传输/超时错误。默认 minimal 的不可投影历史可能返回明确本地拒绝错误，而不是删字段兜底。客户端或外层代理另发 HTTP 请求不属于该预算。
+`auto` / `generic` / `codex` / Messages 默认资源预算为单个输入 HTTP 请求最多 10 次上游调用、1 秒固定间隔、共用 180 秒总时限与取消信号。只重复约定资源错误；不因普通限流、认证、schema、内容过滤或空完成盲重放。耗尽返回实际最后上游错误；若没有可转发的响应，则呈现传输/超时错误。旧显式 minimal 的不可投影历史可能返回明确本地拒绝错误，而不是删字段兜底。客户端或外层代理另发 HTTP 请求不属于该预算。
 
 ### 严格 AgentRouter 历史错误
 
@@ -66,7 +77,7 @@ typed SSE、普通参数错误、权限/认证/内容拦截、额外输出或未
 
 - 只在固定官方 HTTPS AgentRouter 目标的原生 `/responses` 上生效，无需供应商声明或额外开关。其他上游、Chat、compact 和原生 Messages 不启用此降级。
 - 仅识别完整结构化错误中的 `code: "invalid_encrypted_content"`：HTTP 400 错误封装，或成功 HTTP 状态下明确的 error / response.failed。认证、权限、内容拦截等明确终止原因优先；错误外有输出或未知内容时不恢复。
-- 完整显式历史须通过所选客户端的形状及工具配对校验；服务端引用、item_reference、compaction / context_compaction、其他加密项及未知类型不靠删除历史兜底。
+- 完整显式历史须通过自动实际形状或显式兼容契约的工具配对校验；服务端引用、item_reference、compaction / context_compaction、其他加密项及未知类型不靠删除历史兜底。
 - 只在请求副本中删除 `type: "reasoning"` 项的 `encrypted_content` 与该 reasoning 的 `id`。有非空可读 summary / content 文本的 reasoning 保留；否则整项省略。其他 item ID、工具 call_id、名称、参数、结果、模型、effort、认证及 session/cache 身份不动，store/include 不改。
 - 这是**有损重新推理**，不是恢复或解密原来的隐藏思维链。原始请求与客户端持久历史不修改。不能重建的仅密文压缩历史返回实际错误，不自动开新会话。
 - 每个输入 HTTP 请求最多降级一次，共享现有调用上限、总 deadline 和取消信号，不额外叠加一组重试。再次解密失败即返回实际最后错误。先发生 ID 错误再发生密文错误，或顺序相反，均基于当前请求副本处理，不恢复已经删除的密文。
@@ -81,7 +92,7 @@ typed SSE、普通参数错误、权限/认证/内容拦截、额外输出或未
 
 CLI 选 `RHB_CLIENT=codex`，或保留旧 `RHB_HISTORY_MODE=codex`；库用 `createBridge({ ..., historyMode: 'codex' })`；纯函数用 `projectResponsesHistory(body, { mode: 'codex' })`。
 
-默认 `minimal` 只允许移除 `reasoning.id` 和 `function_call.id`，不会自动接受带 ID 的普通 message。`codex` 可移除 `input` 中已校验的 `message`、`reasoning`、`function_call`、`function_call_output` 顶层 `id`；保留 `additional_tools`、`custom_tool_call`、`custom_tool_call_output` 的 ID。
+旧 `minimal` 契约只允许移除 `reasoning.id` 和 `function_call.id`，不会自动接受带 ID 的普通 message。`codex` 可移除 `input` 中已校验的 `message`、`reasoning`、`function_call`、`function_call_output` 顶层 `id`；保留 `additional_tools`、`custom_tool_call`、`custom_tool_call_output` 的 ID。
 
 恢复要求非空显式 `input` 对象数组，拒绝 `previous_response_id` / `conversation` 服务端引用、`item_reference`、非对象项、不完整项、其他未经支持类型的顶层 item ID，以及没有可移除 ID 的请求。
 
@@ -127,7 +138,7 @@ CLI 选 `RHB_CLIENT=harness`，或旧 `RHB_HISTORY_MODE=harness`；库用 `histo
 
 ## Messages 转换
 
-仅在识别到 AgentRouter 目标时，`RHB_CLIENT=claude-code` 或显式 `RHB_UPSTREAM_PROTOCOL=responses` 才将 `/messages` 转为 `/responses` 并转换回 Messages。其他目标始终保留 Messages 协议，客户端与上游须原协议兼容。转换复用 MIT 许可模块，来源版本和许可证见 `lib/vendor/NOTICE`、`lib/vendor/LICENSE`；运行不需要 Mixrouter，不读取其配置或端口。
+仅在识别到 AgentRouter 目标时，默认 auto 协议、旧 `RHB_CLIENT=claude-code` 或显式 `RHB_UPSTREAM_PROTOCOL=responses` 将 `/messages` 转为 `/responses` 并转换回 Messages。显式 passthrough 不转换。其他目标始终保留 Messages 协议，客户端与上游须原协议兼容。转换复用 MIT 许可模块，来源版本和许可证见 `lib/vendor/NOTICE`、`lib/vendor/LICENSE`；运行不需要 Mixrouter，不读取其配置或端口。
 
 转换是受约束的字段映射，不承诺模型/协议身份完全无损：
 
@@ -157,9 +168,7 @@ const { createBridge, projectResponsesHistory } = require('./');
 
 async function main() {
   const bridge = createBridge({
-    upstream: 'https://agentrouter.org/v1',
-    historyMode: 'codex',
-    upstreamProtocol: 'passthrough'
+    upstream: 'https://agentrouter.org/v1'
   });
   await bridge.listen(8790);
   // 用完调用 await bridge.close()。
@@ -168,16 +177,19 @@ async function main() {
 
 库不隐式读取环境变量，历史/协议选项显式传入；可用 listen(0) 分配测试临时端口，close() 关闭 listener、在途请求和本桥 socket。纯投影函数返回新对象，不修改原件；调用方负责提交边界、预算与目标限制。
 
+`createRecoverySession(options)` 提供无监听、无传输的嵌入恢复核心，HTTP 桥也使用它；`current()` 取得请求副本，`decide()` 消费完整检查后的故障并返回受预算保护的决策。网关仍负责真实 URL、认证、输出检查和等待；见[嵌入接口](architecture.md#调用接口)。
+
 `isEncryptedReasoningError(payload, statusCode, upstream)` 检查官方目标及明确错误；`projectEncryptedReasoning(body, { mode })` 校验并创建有损副本，成功返回 `body`、`lossy: true` 和 `removedEncrypted` / `droppedReasoning` / `removedIds` 计数。纯投影本身不识别目标或执行重试，不能绕过桥的输出/预算保护来调用。
 
 ### 保留的高级环境设置
 
-日常优先只设置 client、可选 upstream 和 port，不需要供应商声明开关。以下旧显式选项保留，适合确知边界的库/CLI 集成；恢复和转换相关选项不能为非 AgentRouter 目标启用这些行为：
+日常无需设置 client，只需可选 upstream 和 port，不需要供应商声明开关。以下旧显式选项保留，适合确知边界的库/CLI 集成；恢复和转换相关选项不能为非 AgentRouter 目标启用这些行为：
 
 | 环境变量 | 默认值 / 范围 | 用途 |
 | --- | --- | --- |
-| RHB_HISTORY_MODE | 未显式时由预设决定；minimal / codex / harness | 覆盖客户端预设的历史契约 |
-| RHB_UPSTREAM_PROTOCOL | 未显式时由预设决定；passthrough / responses | 覆盖预设，responses 开启 Messages 转换 |
+| RHB_CLIENT | auto；codex / harness / claude-code / generic | 可选旧兼容预设，不是普通启动必填 |
+| RHB_HISTORY_MODE | auto 或兼容预设；auto / minimal / codex / harness | 显式覆盖历史契约，不推断重试策略 |
+| RHB_UPSTREAM_PROTOCOL | auto 或兼容预设；auto / passthrough / responses | auto 按本组件已支持的端点适配；passthrough 禁止 Messages 转换 |
 | RHB_REASONING_SHAPE | summary；content | 转换 reasoning 形状 |
 | RHB_API_KEY / RHB_KEY_HEADER | 未设置 / authorization | 桥统一认证覆盖 |
 | RHB_USER_AGENT | 未设置 | 显式覆盖出站 User-Agent，否则保留客户端值 |
@@ -203,7 +215,7 @@ async function main() {
 
 - 其他供应商的恢复适配（仅透传）、通用网关、模型池/路由/计费管理。
 - 所有 Agent 零配置接入、封闭 endpoint 客户端、所有管理工具版本兼容。
-- 多用户/远程访问、浏览器 CORS、云服务或后台服务安装。
+- 多用户/远程访问、浏览器 CORS、云服务与系统级流量接管。可选用户级后台运行见[服务说明](service.md)，不自动修改客户端。
 - 所有协议无损互转；Chat → Responses 转换。
 - 所有 400 重试、无差别删除 ID/加密材料、解密隐藏思维链、不受控重放或伪造成功/usage。
 - 自动修改客户端/全局 endpoint、上游、模型、effort、key 或重启已有服务。
@@ -211,7 +223,9 @@ async function main() {
 
 ## 验证记录与未核范围
 
-验证按版本、执行环境和故障来源区分；历史数字不自动继承给新代码。当前加密 reasoning 降级版本已通过本机 Node.js 18/22/24 各 1078/1078，以及安装版 Harness 原有 71＋91 项和新增 25 项 loopback 检查，运行与测试文件指纹在验证期间未变。下表首行为当前版本，其他行为历史证据；不以旧 CI 或旧客户端实验代替新增代码。当前代码已提交并推送功能分支，Windows/macOS/Linux × Node18/22/24 九个 CI 组合全部通过；尚未合入 `main` 或部署。
+验证按版本、执行环境和故障来源区分；历史数字不自动继承给新代码。当前自动/嵌入/后台改造在本机 macOS Node.js 18.20.8 / 22.23.3 / 24.18.0 各 **1418/1418**，验证期间运行与测试文件指纹未变。安装版 Harness 原有 71＋91 项通过；默认自动入口两轮加密 reasoning 故障注入的同版 25 项证据已复用，核心与安装版 adapter 未变，临时连接已关闭。42 项服务用例采用临时文件和注入的原生管理器；真实仓库 macOS dry-run 通过但未安装服务。首轮全量的一项旧默认 Messages 测试失败保留在证据中，改成显式 passthrough 并补查字节/认证后重跑通过，没有为它改运行代码或放宽断言。见[当版记录](verification-automatic-runtime-20261026.json)。
+
+本轮自动/嵌入/服务改造尚未提交、推送或部署，也未执行本版 Windows/Linux CI 或真实用户会话服务安装。下表第二行起均为历史版本证据，不以旧 CI 或旧客户端实验代替新增代码。此前加密修复已提交并推送功能分支，Windows/macOS/Linux × Node18/22/24 九个 CI 组合通过；其 1078/1078 等数字只属于此前版本。
 
 恢复测试在保留官方目标 URL 的同时，通过测试专用传输映射将 HTTP 请求送到本机 mock；不增加生产声明开关，不读取真实 key，也不实际出网。其他目标用例验证仅一次上游调用、请求/响应字节与协议保持、错误原样转发。
 
@@ -220,6 +234,7 @@ async function main() {
 
 | 记录 | 能证明什么 | 不能证明什么 |
 | --- | --- | --- |
+| [2026-10-26 自动/嵌入/后台改造](verification-automatic-runtime-20261026.json) | 本机 macOS 三版 Node 各 1418/1418；同一默认入口处理 Responses/Messages，旧显式覆盖保留，嵌入会话复用相同恢复核心，预算与输出保护通过；安装版 Harness 71/91 与默认自动入口加密两轮续接 25 项通过；42 项服务用例及真实仓库 dry-run 通过。 | 本版未提交、推送或部署，未跑 Windows/Linux CI；服务测试使用注入后端，不证明真实安装、启停或登录自启。未接入正在运行的 Mixrouter，未修改客户端；不证明自然故障、完整 GUI、所有模型/历史或长期负载。 |
 | [2026-10-26 加密 reasoning 降级](verification-encrypted-reasoning-20261026.json) | 本机 Node.js 18/22/24 各 1078/1078，含新增 132 项明确错误、投影、预算、输出/未知/截断保护、作用域及脱敏检查；安装版 Harness 原有 71/91 项和新增两轮原生工具续接 25 项通过，可读摘要/纯密文两种历史按约定投影，调用方历史不改，临时连接已关闭。 | Windows/macOS/Linux × Node18/22/24 九个 CI 组合全部通过，含 PowerShell5.1 实际启动检查；均为 mock，不证明自然 AgentRouter 解密故障恢复。未验证安装版 Codex/Claude Code 的加密故障续接或完整 Harness GUI，不保证所有模型、历史形状或长期负载。已推送功能分支、未合入 main 或部署，未改客户端配置或重启服务。 |
 | [2026-10-26 目标识别与透传](verification-provider-scope-20261026.json) | 本机 Node.js 18/22/24 各 946/946；后续恢复原始伪造主机组合后受影响文件各 29/29。其他目标单次调用、原字节/协议/编码、上游错误透传；安装版 Codex 152 项两类注入均精确投影完成，Harness 71/91 项通过并清理临时资源。 | 已推送 `main`，本次 Windows/macOS/Linux × Node18/22/24 九个 CI 组合全部通过，含 PowerShell7/5.1；首次测试路径失败及后续原样重跑的超时样本已保留，未部署；不证明自然上游故障恢复率、所有历史或长期负载。 |
 | [2026-10-26 AgentRouter 聚焦](verification-agentrouter-focus-20261026.json) | 本机 Node.js 18/22/24 各 887/887；安装版 Codex 152 项复制历史的 Azure 包装与严格400注入均精确投影后完成；安装版 Harness 71 项与 91 项检查通过，临时 listener/socket 全关闭。候选两轮及合入 main 的 Windows/macOS/Linux × Node18/22/24 九个 CI 组合全部通过，Windows PowerShell7/5.1 实际启动检查通过。 | 不证明自然上游故障恢复率、所有历史类型、管理工具版本或长期负载；未修改本地客户端或重启现有服务。 |

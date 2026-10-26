@@ -17,14 +17,5 @@ if [[ ! "$NODE_MAJOR" =~ ^[0-9]+$ ]] || (( NODE_MAJOR < 18 )); then
   exit 1
 fi
 
-if [[ -z "${RHB_CLIENT+x}" && -z "${RHB_HISTORY_MODE+x}" ]]; then
-  printf '%s' '客户端 codex / harness / claude-code / generic [codex]: '
-  if ! IFS= read -r RHB_CLIENT; then
-    printf '%s\n' '无法读取客户端选择，已退出。' >&2
-    exit 1
-  fi
-  RHB_CLIENT="${RHB_CLIENT:-codex}"
-  export RHB_CLIENT
-fi
 printf '%s\n' '默认透传客户端原有密钥；本脚本不询问或保存密钥，不修改客户端配置。' '桥将在前台运行。按 Ctrl+C 停止监听。'
 exec "$NODE_BIN" "$ROOT_DIR/cli.js"

@@ -1,9 +1,9 @@
 {
   "name": "resource-history-bridge",
   "version": "0.1.0",
-  "description": "Local AgentRouter bridge for bounded Responses history recovery",
+  "description": "Embeddable AgentRouter recovery core with automatic local bridge",
   "main": "index.js",
-  "bin": { "resource-history-bridge": "cli.js" },
+  "bin": { "resource-history-bridge": "cli.js", "resource-history-bridge-service": "service-cli.js" },
   "type": "commonjs",
   "engines": { "node": ">=18" },
   "scripts": { "test": "node --test" },

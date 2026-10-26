@@ -70,6 +70,7 @@ async function main() {
   const host = address.family === 'IPv6' ? `[${address.address}]` : address.address;
   const authSource = process.env.RHB_API_KEY === undefined ? 'client' : 'bridge override';
   const effectiveProtocol = agentRouterRecovery ? upstreamProtocol : 'passthrough';
+  if (client === 'auto') process.stdout.write('Automatic request adaptation; no client selection required.\n');
   process.stdout.write(`Upstream: ${upstream.origin}\nAgentRouter recovery: ${agentRouterRecovery ? 'enabled' : 'disabled (passthrough)'}\nClient: ${client}; history: ${historyMode}; protocol: ${effectiveProtocol}; auth source: ${authSource}\nresource-history-bridge listening at http://${host}:${address.port}/v1\n`);
   let closing = false;
   const stop = async () => {

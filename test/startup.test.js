@@ -194,20 +194,19 @@ test('launcher runs from another cwd, preserves configured env and forwards loca
   await listenerClosed(port);
 });
 
-for (const [choice, historyMode, upstreamProtocol] of [
-  ['', 'codex', 'passthrough'], ['codex', 'codex', 'passthrough'],
+for (const [client, historyMode, upstreamProtocol] of [
+  [undefined, 'auto', 'auto'], ['auto', 'auto', 'auto'], ['codex', 'codex', 'passthrough'],
   ['harness', 'harness', 'passthrough'], ['claude-code', 'minimal', 'responses'],
   ['generic', 'minimal', 'passthrough']
 ]) {
-  test(`launcher asks only for client and selects ${choice || 'default codex'}`, { timeout: 45000 }, async t => {
+  test(`launcher starts without prompting in ${client || 'default auto'} mode`, { timeout: 45000 }, async t => {
     const port = await unusedPort();
-    const client = choice || 'codex';
     const { child, closed, state } = await startLauncher(t, {
-      RHB_UPSTREAM: 'https://agentrouter.org/v1', RHB_PORT: String(port)
-    }, `${choice}\n`);
-    assert.match(state.output, /codex \/ harness \/ claude-code \/ generic \[codex\]/);
-    assert.match(state.output, new RegExp(`Client: ${client}; history: ${historyMode}; protocol: ${upstreamProtocol}; auth source: client`));
-    assert.doesNotMatch(state.output, /Upstream API Base URL|上游 API Base URL|Choose responses|选择 responses/);
+      RHB_UPSTREAM: 'https://agentrouter.org/v1', RHB_PORT: String(port),
+      ...(client === undefined ? {} : { RHB_CLIENT: client })
+    });
+    assert.match(state.output, new RegExp(`Client: ${client || 'auto'}; history: ${historyMode}; protocol: ${upstreamProtocol}; auth source: client`));
+    assert.doesNotMatch(state.output, /\[codex\]|codex \/ harness|Choose responses|选择 responses|Read-Host/);
     assert.equal(state.errors, '');
     await killTree(child, 'SIGTERM');
     await closed;
@@ -239,7 +238,7 @@ test('launcher rejects invalid selection and unsafe upstream without logging sec
   for (const [extra, input] of [
     [{ RHB_CLIENT: 'unknown', RHB_UPSTREAM: 'http://127.0.0.1:1/v1' }, undefined],
     [{ RHB_CLIENT: 'generic', RHB_UPSTREAM: 'https://MOCK_USER:MOCK_URL_SECRET@agentrouter.org/v1' }, undefined],
-    [{ RHB_UPSTREAM: 'http://127.0.0.1:1/v1' }, 'unknown\n']
+    [{ RHB_HISTORY_MODE: 'unknown', RHB_UPSTREAM: 'http://127.0.0.1:1/v1' }, undefined]
   ]) {
     const args = windows ? ['-NoProfile', ...(input === undefined ? ['-NonInteractive'] : []), '-File', script] : [script];
     const result = spawnSync(shell, args, {
