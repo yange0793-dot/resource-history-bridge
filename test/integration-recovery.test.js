@@ -283,7 +283,10 @@ test('injected sleep cannot bypass shared deadline or cancellation', async t => 
   let sleeping;
   const started = new Promise(resolve => { sleeping = resolve; });
   const f = await fixture(t, (_req, res) => send(res, 503, '{"error":{"type":"server_error"}}'), {
-    timeoutMs: 40, sleep: () => { sleeping(); return new Promise(() => {}); }
+    // The sleep ignores the signal, so the deadline has to abort it. That needs
+    // the first attempt to complete first, which one round trip at 40 ms did not
+    // guarantee under load.
+    timeoutMs: 400, sleep: () => { sleeping(); return new Promise(() => {}); }
   });
   const request = post(f.address);
   await started;

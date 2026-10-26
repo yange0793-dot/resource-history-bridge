@@ -174,7 +174,11 @@ test('server-initiated requests are refused by default so an approval can never 
 });
 
 test('a call that is never answered times out with a distinct code instead of hanging', { timeout: 20000 }, async t => {
-  const client = mockClient(t, { callTimeoutMs: 150 });
+  // Only the unanswered call is meant to be short. A 150 ms handshake budget made
+  // the test fail on "initialize timed out" whenever the machine was busy enough
+  // that spawning the mock server took longer than that, which is not what this
+  // case is about. initTimeoutMs exists for exactly this separation.
+  const client = mockClient(t, { callTimeoutMs: 150, initTimeoutMs: 15000 });
   await client.initialize();
   await assert.rejects(client.call('slow', {}), error => {
     assert.equal(error.code, 'CODEX_APP_SERVER_TIMEOUT');
