@@ -484,7 +484,9 @@ test('transparent deadline stays monotonic across resource and transient reserva
 
 test('server retry delay beyond deadline relays last actual error without another upstream call', async t => {
   const bytes = json(transient);
-  const f = await fixture(t, (_req, res) => send(res, 503, bytes, 'application/json', { 'retry-after': '10' }), { timeoutMs: 100 });
+  // Still far below the 10 s hint, so the branch is unchanged; the larger budget
+  // only keeps one loopback round trip from deciding the test on a busy machine.
+  const f = await fixture(t, (_req, res) => send(res, 503, bytes, 'application/json', { 'retry-after': '10' }), { timeoutMs: 1000 });
   const result = await post(f.address);
   assert.equal(result.status, 503); assert.deepEqual(result.bytes, bytes); assert.equal(f.requests.length, 1);
 });
