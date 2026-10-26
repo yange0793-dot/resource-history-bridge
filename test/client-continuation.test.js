@@ -4,6 +4,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { readFileSync } = require('node:fs');
 const path = require('node:path');
+const { spawnSync } = require('node:child_process');
 const { turnFingerprint } = require('../lib/turn-continuation');
 const {
   createCodexTurnContinuation,
@@ -502,6 +503,38 @@ test('harness: one continuation per session at a time', async () => {
   );
   open();
   assert.equal((await first).status, 'completed');
+});
+
+test('codex: the start timeout alone keeps the process alive until it reports ambiguity', () => {
+  // A hung turn/start holds no socket or timer of its own. If withTimeout's
+  // timer were unref'd the process would exit before the timeout fired and the
+  // ambiguous acknowledgement would never reach the caller.
+  const script = `
+    const { createCodexTurnContinuation } = require(${JSON.stringify(path.join(__dirname, '..', 'lib', 'client-continuation'))});
+    const THREAD = 'thr_timeout_child';
+    const adapter = createCodexTurnContinuation({
+      startTimeoutMs: 120,
+      rpc: { async call(method) {
+        if (method === 'thread/resume') return { thread: { id: THREAD } };
+        return new Promise(() => {});
+      } },
+      subscribe: () => () => {},
+      readSnapshot: async context => ({ snapshotId: 'snap_1', failedTurnId: context.failedTurnId,
+        failedFingerprint: context.failedFingerprint, durableCommitted: true, turnActive: false,
+        pendingApproval: false, pendingTools: false, startedToolCallsSettled: true,
+        ambiguousSideEffects: false, nativeRetryPending: false })
+    });
+    adapter.run({ threadId: THREAD, failedTurn: { threadId: THREAD, turn: { id: 'turn_1', status: 'failed',
+      items: [], error: { message: 'x', codexErrorInfo: 'rateLimitExceeded', additionalDetails: null } } } })
+      .then(result => { process.stdout.write(JSON.stringify({ status: result.status, reason: result.reason })); },
+        error => { process.stdout.write(JSON.stringify({ error: String(error && error.message) })); process.exitCode = 3; });
+  `;
+  const child = spawnSync(process.execPath, ['-e', script], { encoding: 'utf8', timeout: 30000 });
+  assert.equal(child.status, 0, `child exited without settling: ${child.stdout} ${child.stderr}`);
+  const parsed = JSON.parse(child.stdout || 'null');
+  // An unanswered start is ambiguous and must be reported, never retried.
+  assert.equal(parsed.status, 'stopped');
+  assert.ok(['resume_unavailable'].includes(parsed.reason), JSON.stringify(parsed));
 });
 
 test('neither adapter logs or copies conversation content', () => {

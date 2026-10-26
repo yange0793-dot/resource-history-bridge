@@ -2,6 +2,8 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const path = require('node:path');
+const { spawnSync } = require('node:child_process');
 const {
   createTurnContinuation,
   classifyContinuationFailure,
@@ -405,6 +407,70 @@ test('a throwing progress reporter cannot change the outcome', async () => {
     input: { onProgress: () => { throw new Error('reporter exploded'); } }
   });
   assert.equal(result.status, 'completed');
+});
+
+test('a real backoff wait keeps the run alive and then resumes', () => {
+  // Runs in a child process: the only pending work during the wait is the
+  // backoff timer itself. An unref'd timer lets Node treat the loop as drained
+  // and exit before the continuation resumes, silently dropping the run.
+  const script = `
+    const { createTurnContinuation } = require(${JSON.stringify(path.join(__dirname, '..', 'lib', 'turn-continuation'))});
+    const THREAD = 'thr_backoff_child';
+    const turn = (id, status, code) => ({ threadId: THREAD, turnId: id, status, terminal: true,
+      error: status === 'failed' ? { code } : null });
+    let snapshot = 0;
+    const coordinator = createTurnContinuation({ baseDelayMs: 120, maxDelayMs: 120 });
+    coordinator.run({
+      threadId: THREAD,
+      initialTurn: turn('turn_1', 'failed', 'rateLimitExceeded'),
+      readSnapshot: async context => ({ snapshotId: 'snap_' + (++snapshot),
+        failedTurnId: context.failedTurnId, failedFingerprint: context.failedFingerprint,
+        durableCommitted: true, turnActive: false, pendingApproval: false, pendingTools: false,
+        startedToolCallsSettled: true, ambiguousSideEffects: false, nativeRetryPending: false }),
+      resumeTurn: async context => context.continuationIndex === 1
+        ? turn('turn_2', 'failed', 'serverOverloaded')
+        : turn('turn_3', 'completed')
+    }).then(result => {
+      process.stdout.write(JSON.stringify({ status: result.status, continuations: result.continuations }));
+    }, error => {
+      process.stdout.write(JSON.stringify({ error: String(error && error.message) }));
+      process.exitCode = 3;
+    });
+  `;
+  const child = spawnSync(process.execPath, ['-e', script], { encoding: 'utf8', timeout: 30000 });
+  assert.equal(child.status, 0, `child exited early: ${child.stdout} ${child.stderr}`);
+  assert.deepEqual(JSON.parse(child.stdout), { status: 'completed', continuations: 2 });
+});
+
+test('the deadline timer alone keeps the run alive until it aborts', () => {
+  // Same drain hazard as the backoff timer: a host whose resumeTurn holds no
+  // socket or timer leaves this deadline as the only pending work. If it were
+  // unref'd the process would exit before the deadline fired and the caller's
+  // promise would never settle.
+  const script = `
+    const { createTurnContinuation } = require(${JSON.stringify(path.join(__dirname, '..', 'lib', 'turn-continuation'))});
+    const THREAD = 'thr_deadline_child';
+    const coordinator = createTurnContinuation({ deadlineMs: 120, baseDelayMs: 0, maxDelayMs: 0 });
+    coordinator.run({
+      threadId: THREAD,
+      initialTurn: { threadId: THREAD, turnId: 'turn_1', status: 'failed', terminal: true, error: { code: 'rateLimitExceeded' } },
+      readSnapshot: async context => ({ snapshotId: 'snap_1', failedTurnId: context.failedTurnId,
+        failedFingerprint: context.failedFingerprint, durableCommitted: true, turnActive: false,
+        pendingApproval: false, pendingTools: false, startedToolCallsSettled: true,
+        ambiguousSideEffects: false, nativeRetryPending: false }),
+      // Never settles and holds no handle: nothing but the deadline keeps the loop alive.
+      resumeTurn: async () => new Promise(() => {})
+    }).then(result => {
+      process.stdout.write(JSON.stringify({ status: result.status, reason: result.reason }));
+    }, error => {
+      process.stdout.write(JSON.stringify({ error: String(error && error.message) }));
+      process.exitCode = 3;
+    });
+  `;
+  const child = spawnSync(process.execPath, ['-e', script], { encoding: 'utf8', timeout: 30000 });
+  assert.equal(child.status, 0, `child exited without settling: ${child.stdout} ${child.stderr}`);
+  const parsed = JSON.parse(child.stdout || 'null');
+  assert.deepEqual(parsed, { status: 'stopped', reason: 'deadline_expired' });
 });
 
 test('options and inputs are validated', async () => {
