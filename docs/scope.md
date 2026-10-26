@@ -37,7 +37,7 @@
 
 原生 Responses 默认 `on-error` 首请求保留原 JSON 字节。只在可识别的未输出错误、完整可投影历史及剩余预算成立时，创建副本并移除约定 item ID；投影最多一次，之后同类错误重发同一投影字节，不继续删字段。显式 `portable` 可提前投影，也不修改客户端持久历史。
 
-恢复保留 `encrypted_content`、`call_id`、工具名称、参数、输入/结果、文本及其他非投影字段；原生请求的模型、effort、认证和 session/cache 标识不因重试旋转。认证在首次接收的单个 HTTP 请求内固定。Messages 转换的字段映射另见下节，不能把资源恢复的保留规则说成所有协议字段无损。
+历史 ID 恢复保留 `encrypted_content`、`call_id`、工具名称、参数、输入/结果、文本及其他非投影字段；原生请求的模型、effort、认证和 session/cache 标识不因重试旋转。认证在首次接收的单个 HTTP 请求内固定。Messages 转换的字段映射另见下节，不能把资源恢复的保留规则说成所有协议字段无损。
 
 检测 HTTP 400 JSON、提交前已知 SSE 错误，以及 HTTP 400 `text/event-stream` header 下完整 JSON 正文的实测包装。后者须在有界缓冲内完整严格解析并正常结束。
 
@@ -59,6 +59,23 @@ typed SSE、普通参数错误、权限/认证/内容拦截、额外输出或未
 该规则默认可用，不依赖 Harness 的 `generic400Projection` 开关，但不证明错误内部的 Azure 原因，不是所有 400 的重试规则，也不启用其他客户端空响应恢复。
 
 固定 loopback 代理不满足官方主机条件，即使它实际连接 AgentRouter。所有恢复及 Messages 转换均关闭，仅转发原协议；不存在 trusted-header 或错误内容绕过。Harness 的受限泛化 400 候选也是已识别 AgentRouter 后的策略，不能用于证明代理的官方身份。
+
+## 加密 reasoning 解密失败降级
+
+此路径与历史 item ID 投影分开。默认首请求不改密文，也不凭普通 `invalid_request_error`、通用 `invalid` 包装或错误文本中的 `decrypt` 猜测原因。
+
+- 只在固定官方 HTTPS AgentRouter 目标的原生 `/responses` 上生效，无需供应商声明或额外开关。其他上游、Chat、compact 和原生 Messages 不启用此降级。
+- 仅识别完整结构化错误中的 `code: "invalid_encrypted_content"`：HTTP 400 错误封装，或成功 HTTP 状态下明确的 error / response.failed。认证、权限、内容拦截等明确终止原因优先；错误外有输出或未知内容时不恢复。
+- 完整显式历史须通过所选客户端的形状及工具配对校验；服务端引用、item_reference、compaction / context_compaction、其他加密项及未知类型不靠删除历史兜底。
+- 只在请求副本中删除 `type: "reasoning"` 项的 `encrypted_content` 与该 reasoning 的 `id`。有非空可读 summary / content 文本的 reasoning 保留；否则整项省略。其他 item ID、工具 call_id、名称、参数、结果、模型、effort、认证及 session/cache 身份不动，store/include 不改。
+- 这是**有损重新推理**，不是恢复或解密原来的隐藏思维链。原始请求与客户端持久历史不修改。不能重建的仅密文压缩历史返回实际错误，不自动开新会话。
+- 每个输入 HTTP 请求最多降级一次，共享现有调用上限、总 deadline 和取消信号，不额外叠加一组重试。再次解密失败即返回实际最后错误。先发生 ID 错误再发生密文错误，或顺序相反，均基于当前请求副本处理，不恢复已经删除的密文。
+- 输出、推理、工具、未知帧、部分尾帧、下游提交或有界检查缓冲超限后不整轮重放。未成功验证的降级不改变错误，不生成本地 409。
+- 应用降级后的响应带 `x-rhb-recovery: encrypted-reasoning-dropped`；不插入自定义 SSE 事件或伪造完成。开启诊断时记录 `encrypted_reasoning_downgrade` 及有损/计数标记，仍不记录密文、摘要、工具内容或原始错误文本。
+
+这里保留对已知错误的补救能力，不声称 AgentRouter 近期的故障频率，也不保证任意模型接受降级后的 reasoning。`item_not_found`、签名错误、加密工具结果和普通 schema 错误不混入此规则。
+
+设计依据：[Codex 跨模型密文失败报告](https://github.com/openai/codex/issues/17541)、[LiteLLM 加密内容路由事故](https://docs.litellm.ai/blog/responses-api-encrypted-content-incident)及其[有损降级实现](https://github.com/BerriAI/litellm/blob/dddbaa803d6e9fcc862ea7a5412f771cb1ae040e/litellm/router_utils/pre_call_checks/encrypted_content_affinity_check.py)。这些是通用故障与源码证据，不是本桥自然 AgentRouter 故障恢复率证据；[Pi 终态回填修复](https://github.com/earendil-works/pi/pull/6608)解决的是漏采密文，不能代替解密失败恢复。
 
 ## Codex 历史投影契约
 
@@ -151,6 +168,8 @@ async function main() {
 
 库不隐式读取环境变量，历史/协议选项显式传入；可用 listen(0) 分配测试临时端口，close() 关闭 listener、在途请求和本桥 socket。纯投影函数返回新对象，不修改原件；调用方负责提交边界、预算与目标限制。
 
+`isEncryptedReasoningError(payload, statusCode, upstream)` 检查官方目标及明确错误；`projectEncryptedReasoning(body, { mode })` 校验并创建有损副本，成功返回 `body`、`lossy: true` 和 `removedEncrypted` / `droppedReasoning` / `removedIds` 计数。纯投影本身不识别目标或执行重试，不能绕过桥的输出/预算保护来调用。
+
 ### 保留的高级环境设置
 
 日常优先只设置 client、可选 upstream 和 port，不需要供应商声明开关。以下旧显式选项保留，适合确知边界的库/CLI 集成；恢复和转换相关选项不能为非 AgentRouter 目标启用这些行为：
@@ -186,13 +205,13 @@ async function main() {
 - 所有 Agent 零配置接入、封闭 endpoint 客户端、所有管理工具版本兼容。
 - 多用户/远程访问、浏览器 CORS、云服务或后台服务安装。
 - 所有协议无损互转；Chat → Responses 转换。
-- 所有 400 重试、删除所有 ID/加密材料、不受控重放或伪造成功/usage。
+- 所有 400 重试、无差别删除 ID/加密材料、解密隐藏思维链、不受控重放或伪造成功/usage。
 - 自动修改客户端/全局 endpoint、上游、模型、effort、key 或重启已有服务。
 - 对所有历史类型、自然故障恢复率、长混合历史和长期并发的普遍保证。
 
 ## 验证记录与未核范围
 
-验证按版本、执行环境和故障来源区分；历史数字不自动继承给新代码。本次目标识别与非 AgentRouter 透传修改已通过本机三版 Node 全量及安装客户端/adapter 的 loopback 验证，已推送 `main` 并触发本次跨平台 CI；状态见本次记录，不以旧 CI 代替。
+验证按版本、执行环境和故障来源区分；历史数字不自动继承给新代码。当前加密 reasoning 降级版本已通过本机 Node.js 18/22/24 各 1078/1078，以及安装版 Harness 原有 71＋91 项和新增 25 项 loopback 检查，运行与测试文件指纹在验证期间未变。下表首行为当前版本，其他行为历史证据；不以旧 CI 或旧客户端实验代替新增代码。当前修改尚未提交、推送或部署，未执行本版 Windows/Linux CI。
 
 恢复测试在保留官方目标 URL 的同时，通过测试专用传输映射将 HTTP 请求送到本机 mock；不增加生产声明开关，不读取真实 key，也不实际出网。其他目标用例验证仅一次上游调用、请求/响应字节与协议保持、错误原样转发。
 
@@ -201,6 +220,7 @@ async function main() {
 
 | 记录 | 能证明什么 | 不能证明什么 |
 | --- | --- | --- |
+| [2026-10-26 加密 reasoning 降级](verification-encrypted-reasoning-20261026.json) | 本机 Node.js 18/22/24 各 1078/1078，含新增 132 项明确错误、投影、预算、输出/未知/截断保护、作用域及脱敏检查；安装版 Harness 原有 71/91 项和新增两轮原生工具续接 25 项通过，可读摘要/纯密文两种历史按约定投影，调用方历史不改，临时连接已关闭。 | 全部为 loopback 故障注入，未复现自然 AgentRouter 解密故障；本版未执行 Windows/Linux CI，未验证安装版 Codex/Claude Code 的加密故障续接或完整 Harness GUI；不保证所有模型、历史形状或长期负载。未提交、推送或部署，未改客户端配置或重启服务。 |
 | [2026-10-26 目标识别与透传](verification-provider-scope-20261026.json) | 本机 Node.js 18/22/24 各 946/946；后续恢复原始伪造主机组合后受影响文件各 29/29。其他目标单次调用、原字节/协议/编码、上游错误透传；安装版 Codex 152 项两类注入均精确投影完成，Harness 71/91 项通过并清理临时资源。 | 已推送 `main`，本次 Windows/macOS/Linux × Node18/22/24 九个 CI 组合全部通过，含 PowerShell7/5.1；首次测试路径失败及后续原样重跑的超时样本已保留，未部署；不证明自然上游故障恢复率、所有历史或长期负载。 |
 | [2026-10-26 AgentRouter 聚焦](verification-agentrouter-focus-20261026.json) | 本机 Node.js 18/22/24 各 887/887；安装版 Codex 152 项复制历史的 Azure 包装与严格400注入均精确投影后完成；安装版 Harness 71 项与 91 项检查通过，临时 listener/socket 全关闭。候选两轮及合入 main 的 Windows/macOS/Linux × Node18/22/24 九个 CI 组合全部通过，Windows PowerShell7/5.1 实际启动检查通过。 | 不证明自然上游故障恢复率、所有历史类型、管理工具版本或长期负载；未修改本地客户端或重启现有服务。 |
 | [2026-10-26 Codex 同步](verification-codex-parity-20261026.json) | 此前 runtime cc89085：macOS Node.js 18/22/24 各 827/827；Ubuntu/macOS/Windows × 三版 Node 九个 CI job 成功，实际 PowerShell 启动检查。安装版 Codex 0.164.0 对 loopback 故障 mock 完成 152 项历史投影与工具续接；Harness parity 71 项、完整 91 项检查通过。 | 不验证本轮聚焦重构；Codex 故障与恢复响应均为 mock，不是自然 AgentRouter 跨资源故障；不覆盖所有历史或持续负载。 |
@@ -208,4 +228,4 @@ async function main() {
 | [2026-10-25 Harness 连续恢复](verification-harness-recovery-20261025.json) | 历史连续恢复版本的 loopback 单测、安装版 PiAiAdapter、脱敏/预算/清理检查；一项普通真实上游 smoke。 | 非完整 Harness GUI，普通 smoke 非自然资源故障；记录中的当时 Windows/推送状态不代表后续同步版本。 |
 | [更早 Harness](verification-harness-20261025.json) / [早期验证](verification-20261025.json) | 早期行为及实验存档。 | 被取消的全客户端空响应策略不代表当前功能。 |
 
-此前 cc89085 同步已有九平台 CI 成功及提交/推送/合入记录，不再把“Windows 未执行”或“尚未推送”当作当前事实；本轮重构仍须自己的受影响测试与实际平台结果。Windows CI 使用 mock，未验证 Windows 安装版 Claude Code/Codex 对真实 AgentRouter。配置管理工具仅有 endpoint 接入说明，未实测全部工具/版本。
+此前同步和目标识别版本已有九平台 CI 成功及提交/推送/合入记录；当前加密 reasoning 降级修改仍未提交、推送或运行跨平台 CI，两者不能混用。历史 Windows CI 使用 mock，未验证 Windows 安装版 Claude Code/Codex 对真实 AgentRouter。配置管理工具仅有 endpoint 接入说明，未实测全部工具/版本。

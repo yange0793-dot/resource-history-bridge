@@ -78,7 +78,7 @@ env_key = "OPENAI_API_KEY"
 
 如果已有 provider，只修改其 `base_url`，不重复创建同名 TOML 表。密钥继续由现有环境管理提供 `OPENAI_API_KEY`，不写进 TOML。配置或客户端环境改变后，从正确环境启动新的 Codex 会话。
 
-`RHB_CLIENT` 是桥的启动设置，不是 Codex 模型名称或 TOML 配置项。Codex 模式只投影已校验的四类 item ID；工具结果必须完整内联并唯一配对，nullable reasoning 原样保留。完整形状见 [Codex 契约](scope.md#codex-历史投影契约)。
+`RHB_CLIENT` 是桥的启动设置，不是 Codex 模型名称或 TOML 配置项。Codex 的历史 ID 模式只投影已校验的四类 item ID；工具结果必须完整内联并唯一配对，nullable reasoning 原样保留。另有仅在明确 `invalid_encrypted_content` 后尝试一次的[有损 reasoning 降级](scope.md#加密-reasoning-解密失败降级)，不主动删除正常密文或压缩历史。完整形状见 [Codex 契约](scope.md#codex-历史投影契约)。
 
 ### Claude Code
 
@@ -94,7 +94,7 @@ $env:ANTHROPIC_BASE_URL = 'http://127.0.0.1:8790'
 
 保留原模型及现有 `ANTHROPIC_API_KEY` / `ANTHROPIC_AUTH_TOKEN` 来源，不复制或重写 key。如果配置管理工具提供 Base URL，修改那个来源，避免终端与配置文件两处值冲突。
 
-该预设把 Messages 转为 AgentRouter Responses，再转回 Messages。原生 Responses 请求仍原协议转发。转换会映射认证、token 上限、effort 和部分身份字段，不能笼统称为无损互转；支持与保留边界见 [Messages 转换](scope.md#messages-转换)。
+该预设把 Messages 转为 AgentRouter Responses，再转回 Messages。原生 Responses 请求仍原协议转发；这类请求的明确密文解密错误可按[降级规则](scope.md#加密-reasoning-解密失败降级)恢复。Claude Code 的 Messages thinking.signature 不等同于 Responses encrypted_content，本规则不把普通签名错误当成密文故障，也不修改签名来伪造有效历史。转换会映射认证、token 上限、effort 和部分身份字段，不能笼统称为无损互转；支持与保留边界见 [Messages 转换](scope.md#messages-转换)。
 
 ### DeepSeek Harness
 
@@ -119,7 +119,7 @@ $env:ANTHROPIC_BASE_URL = 'http://127.0.0.1:8790'
 
 `supportsStrictMode: true` 使 PiAiAdapter 可以显式发送 `strict: false`，不是开启严格工具模式。不填时部分 Responses 上游会默认严格化工具 schema，使可选参数变为必填。不要删除其他 compat 配置，也不要写 `config: !!js`。
 
-Harness 模式适配 PiAiAdapter 的原生历史，不修改持久 replayState、签名或 backfill；恢复只在请求副本上进行。原生 `/responses` 另有共享预算的瞬时错误与明确空终态恢复，耗尽后仍返回实际最后响应，客户端仍可能报告原生 `EMPTY_RESPONSE`。其他客户端空完成策略不因此改变。见 [Harness 契约](scope.md#harness-历史投影契约)。
+Harness 模式适配 PiAiAdapter 的原生历史，不修改持久 replayState、签名或 backfill；恢复只在请求副本上进行。明确的 `invalid_encrypted_content` 还可触发一次有损 reasoning 降级，保留可读摘要与完整工具历史，并以响应 header 标记；不能重建的压缩历史不删，见 [降级范围](scope.md#加密-reasoning-解密失败降级)。原生 `/responses` 另有共享预算的瞬时错误与明确空终态恢复，耗尽后仍返回实际最后响应，客户端仍可能报告原生 `EMPTY_RESPONSE`。其他客户端空完成策略不因此改变。见 [Harness 契约](scope.md#harness-历史投影契约)。
 
 原生 DeepSeek API / `openai-completions` 不是 Responses。配置为其他供应商时本桥只做原协议透传，不启用 AgentRouter 的历史投影或连续恢复；Chat Completions 只有原协议转发能力。
 
