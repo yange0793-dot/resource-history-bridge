@@ -50,12 +50,20 @@
     {"probe": "full", "checks": 91, "pass": true, "listenersAndSocketsClosed": true}
   ],
   "ci": {
-    "status": "pending",
-    "matrix": "Ubuntu/macOS/Windows x Node18/22/24; actual Windows PowerShell7 and5.1 launcher tests",
+    "status": "success",
+    "verifiedCandidateCommit": "91e2f62a9a5999a382e1e9de9edb7d9e8ac78584",
+    "candidateRuns": [40258762995, 40258767048],
+    "mergedMainCommit": "75f15d4aa1509220101859649a2621909b8ce82d",
+    "mergedMainRun": 40258959595,
+    "matrix": "Ubuntu/macOS/Windows x Node18/22/24; all nine jobs passed in both candidate runs and the merged-main run, including actual Windows PowerShell7 and5.1 launcher tests",
     "retainedFailedRuns": [40258483304, 40258499568],
-    "initialFailure": "Windows captured stdin did not include the Read-Host prompt; all five client choices selected and started correctly but prompt visibility assertions failed. Ubuntu/macOS passed. Windows launcher will print choices explicitly before reading input; tests are not skipped or weakened."
+    "initialFailure": "Windows captured stdin did not include the Read-Host prompt; all five client choices selected and started correctly but prompt visibility assertions failed. Ubuntu/macOS passed. Explicit Write-Host before Read-Host fixed visibility; no tests skipped or weakened. Local affected startup/CLI tests29/29 passed; runtime and installed-client evidence unchanged."
   },
   "delivery": {
+    "committed": true,
+    "pushed": true,
+    "mergedMain": true,
+    "pullRequest": "https://github.com/yange0793-dot/resource-history-bridge/pull/2",
     "localClientsStayOnMixrouter": true,
     "clientConfigurationsChanged": false,
     "existingServicesRestarted": false,

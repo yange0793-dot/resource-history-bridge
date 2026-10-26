@@ -57,4 +57,4 @@ node .\cli.js
 node --test
 ```
 
-测试使用 loopback mock，不需要真实 key。本轮 AgentRouter 聚焦重构在本机 Node.js 18/22/24 各 887/887；安装版 Codex 的 152 项复制历史在两类故障注入下均完成精确投影，Harness 的 71 项与 91 项检查通过。跨平台 CI 状态见 [本轮记录](docs/verification-agentrouter-focus-20261026.json)；自然上游故障和长期负载不在本轮验证范围。
+测试使用 loopback mock，不需要真实 key。本轮 AgentRouter 聚焦重构在本机 Node.js 18/22/24 各 887/887；安装版 Codex 的 152 项复制历史在两类故障注入下均完成精确投影，Harness 的 71 项与 91 项检查通过。Windows/macOS/Linux × Node.js 18/22/24 九个 CI 组合全部通过，Windows PowerShell 7/5.1 实际启动测试通过，见 [本轮记录](docs/verification-agentrouter-focus-20261026.json)；自然上游故障和长期负载不在本轮验证范围。
