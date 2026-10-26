@@ -144,7 +144,7 @@ export default { name, inject, apply };
 
 ## 验证方式
 
-- 单元测试：`node --test test/harness-host.test.js`（24 项，覆盖触发、`willRetry` 期间不触发、工具未结算/待批准不触发、同指纹不重复续、预算与取消、缺失 seam 明确拒绝）。测试用的是**真实事件与 payload 形状的 mock**，不是真实模型调用。
+- 单元测试：`node --test test/harness-host.test.js`（25 项，覆盖触发、`willRetry` 期间不触发、工具未结算/待批准不触发、同指纹不重复续、预算与取消、缺失 seam 明确拒绝）。测试用的是**真实事件与 payload 形状的 mock**，不是真实模型调用。
 - 手动冒烟（可选，需要你自己开应用）：断掉上游或让代理端口不可用，制造一次 `TRANSPORT` 终结 → 日志出现 `turn/end { reason.kind: 'error', code: 'TRANSPORT' }` → 几秒内会话里出现一条 `Continue from where the previous turn stopped.` 的用户消息，并且新 turn 正常跑完。
 - 关掉自动续跑做对照：把插件里的 `autoContinue: true` 改成 `false`，只留观察（宿主仍会记录拒绝原因，可通过 `host.diagnostics()` 读取）。
 

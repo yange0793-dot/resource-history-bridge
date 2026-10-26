@@ -66,6 +66,7 @@ node .\cli.js
 - [客户端接入](docs/clients.md)：macOS / Windows、Codex、Harness、Claude Code、配置管理工具、换 key。
 - [嵌入与架构](docs/architecture.md)：恢复核心、自动 HTTP 入口与运行壳的边界和源码参考。
 - [客户端续跑](docs/continuation.md)：原生重试耗尽后在同一会话受控续跑的接口与宿主前置条件；含内置的 Codex app-server 客户端与 `rhb-codex-continue` 命令。
+- [Harness 自动续跑插件](docs/harness-plugin.md)：在已安装的 DeepSeek Harness 里以进程内插件续跑失败的 turn，含真实接口、安装与回退、以及补不了的缺口。
 - [后台运行](docs/service.md)：用户级安装、dry-run、状态、启停与卸载，不接管配置或密钥。
 - [当前范围](docs/scope.md)：自动契约与旧配置优先级、恢复预算、转换保留字段、库 API 与高级选项。
 - [验证记录](docs/scope.md#验证记录与未核范围)：区分真实上游、故障注入、安装版 adapter 和跨平台 CI。

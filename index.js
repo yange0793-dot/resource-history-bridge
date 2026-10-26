@@ -10,6 +10,7 @@ module.exports = {
   ...require('./lib/turn-continuation'),
   ...require('./lib/client-continuation'),
   ...require('./lib/codex-app-server'),
+  ...require('./lib/harness-host'),
   ...require('./lib/request-profile'),
   ...require('./lib/diagnostics'),
   ...require('./lib/bridge')
