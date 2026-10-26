@@ -176,18 +176,31 @@ test('Windows generated runtime log is capped at 1MiB without truncating prior e
   const code = plan.files.find(file => file.path === plan.bootstrapPath).content;
   fs.mkdirSync(path.dirname(plan.stdoutPath), { recursive: true });
   fs.writeFileSync(plan.stdoutPath, Buffer.alloc(1024 * 1024 - 4, 'x'));
-  const processMock = { env: { RHB_API_KEY: 'secret' }, stdout: {}, stderr: {} };
-  vm.runInNewContext(code, { process: processMock, require, Buffer });
-  let calls = 0;
-  processMock.stdout.write('123456789', () => { calls++; });
-  processMock.stderr.write('must-not-append', () => { calls++; });
-  assert.equal(fs.statSync(plan.stdoutPath).size, 1024 * 1024);
-  assert.equal(fs.readFileSync(plan.stdoutPath).subarray(-4).toString(), '1234');
-  assert.equal(calls, 2);
-  const nextProcess = { env: {}, stdout: {}, stderr: {} };
-  vm.runInNewContext(code, { process: nextProcess, require, Buffer });
-  nextProcess.stdout.write('after-restart');
-  assert.equal(fs.statSync(plan.stdoutPath).size, 1024 * 1024);
+  const descriptors = new Set();
+  const logFs = new Proxy(fs, { get(target, name) {
+    if (name === 'openSync') return (...args) => { const fd = target.openSync(...args); descriptors.add(fd); return fd; };
+    return typeof target[name] === 'function' ? target[name].bind(target) : target[name];
+  } });
+  const logRequire = name => { assert.equal(name, 'node:fs'); return logFs; };
+  try {
+    const processMock = { env: { RHB_API_KEY: 'secret' }, stdout: {}, stderr: {} };
+    vm.runInNewContext(code, { process: processMock, require: logRequire, Buffer });
+    let calls = 0;
+    processMock.stdout.write('123456789', () => { calls++; });
+    processMock.stderr.write('must-not-append', () => { calls++; });
+    assert.equal(fs.statSync(plan.stdoutPath).size, 1024 * 1024);
+    assert.equal(fs.readFileSync(plan.stdoutPath).subarray(-4).toString(), '1234');
+    assert.equal(calls, 2);
+    const nextProcess = { env: {}, stdout: {}, stderr: {} };
+    vm.runInNewContext(code, { process: nextProcess, require: logRequire, Buffer });
+    nextProcess.stdout.write('after-restart');
+    assert.equal(fs.statSync(plan.stdoutPath).size, 1024 * 1024);
+    assert.equal(descriptors.size, 2);
+  } finally {
+    for (const fd of descriptors) fs.closeSync(fd);
+    descriptors.clear();
+  }
+  assert.equal(descriptors.size, 0);
 });
 
 test('Linux native definition escapes dollar expansion only in ExecStart', t => {
@@ -248,6 +261,26 @@ test('native failure during startup preserves foreign native service instead of 
   assert.ok(fs.existsSync(plan.manifestPath));
   assert.ok(!f.events.includes('stop')); assert.ok(!f.events.includes('uninstall'));
 });
+
+for (const platform of ['darwin', 'linux', 'win32']) {
+  test(`${platform} file transaction flush uses a writable non-truncating handle before atomic publish`, async t => {
+    const f = fixture(t, platform), flags = new Map(), flushed = new Set();
+    const base = f.configuration.fs;
+    const io = new Proxy(base, { get(target, name) {
+      if (name === 'openSync') return (file, flag, ...args) => { const fd = target.openSync(file, flag, ...args); flags.set(fd, flag); return fd; };
+      if (name === 'fsyncSync') return fd => {
+        assert.equal(flags.get(fd), 'r+', 'Windows FlushFileBuffers requires write access; do not skip fsync or truncate the staged file.');
+        target.fsyncSync(fd); flushed.add(fd);
+      };
+      if (name === 'closeSync') return fd => { flags.delete(fd); return target.closeSync(fd); };
+      return target[name];
+    } });
+    const manager = createServiceManager({ ...f.configuration, fs: io });
+    assert.equal((await manager.install()).ready, true);
+    assert.ok(flushed.size > 0);
+    assert.equal(flags.size, 0);
+  });
+}
 
 test('file transaction failure restores no files and keeps preexisting directories', async t => {
   const f = fixture(t), plan = f.manager.planInstall();
