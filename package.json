@@ -6,7 +6,7 @@
   "bin": { "resource-history-bridge": "cli.js", "resource-history-bridge-service": "service-cli.js", "rhb-codex-continue": "bin/rhb-codex-continue.js" },
   "type": "commonjs",
   "engines": { "node": ">=18" },
-  "scripts": { "test": "node --test" },
+  "scripts": { "test": "node --test --test-timeout=120000" },
   "private": true,
   "license": "UNLICENSED"
 }

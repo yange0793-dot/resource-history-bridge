@@ -473,12 +473,14 @@ test('legacy non-Harness configuration preserves wider Azure retry bounds', asyn
 
 test('retry that stalls under shared deadline does not relay an older attempt', async t => {
   // Which branch this exercises depends on one fact: whether a later attempt was
-  // actually sent. A frozen recovery clock pins that fact (the retry-loop deadline
-  // check cannot trip), and the real timer — not machine speed — then aborts the
-  // stalled second attempt. Relying on the round trip staying under 45 ms instead
-  // made the outcome a coin flip under load.
+  // actually sent before the deadline aborted it. Two things pin that. The frozen
+  // recovery clock keeps the retry-loop deadline check from deciding the outcome,
+  // and the budget is far larger than one loopback round trip, so the first
+  // attempt always completes and the second is always in flight when the real
+  // timer fires. A 45 ms budget instead let the abort land mid-read of the first
+  // response, which relayed the older 503 and made the result a coin flip.
   const f = await fixture(t, (_req, res, n) => { if (n === 1) send(res, 503, '{"error":{"type":"server_error"}}'); },
-    { timeoutMs: 45, now: () => 1000 });
+    { timeoutMs: 400, now: () => 1000 });
   const result = await post(f.address);
   assert.equal(result.status, 504);
   assert.equal(f.requests.length, 2);
