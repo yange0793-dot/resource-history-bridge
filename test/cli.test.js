@@ -31,7 +31,7 @@ test('CLI starts via env, relays mock request and SIGTERM closes listener', asyn
   t.after(() => new Promise(resolve => upstream.close(resolve)));
   const port = await unusedPort();
   const child = spawn(process.execPath, [cli], {
-    env: { ...process.env, RHB_UPSTREAM: `http://127.0.0.1:${upstream.address().port}/v1`, RHB_PORT: String(port), RHB_API_KEY: 'MOCK_CLI_KEY' },
+    env: { ...process.env, RHB_UPSTREAM: `http://127.0.0.1:${upstream.address().port}/v1`, RHB_PORT: String(port), RHB_API_KEY: 'MOCK_CLI_KEY', RHB_HISTORY_MODE: 'harness' },
     stdio: ['ignore', 'pipe', 'pipe']
   });
   t.after(() => { if (child.exitCode === null) child.kill('SIGKILL'); });
@@ -61,7 +61,9 @@ test('CLI starts via env, relays mock request and SIGTERM closes listener', asyn
   const exited = once(child, 'exit');
   child.kill('SIGTERM');
   const [code] = await exited;
-  assert.equal(code, 0);
+  // Windows terminates Node for SIGTERM instead of invoking its signal handler.
+  if (process.platform !== 'win32') assert.equal(code, 0);
+  assert.equal(child.exitCode !== null || child.signalCode !== null, true);
   assert.equal(errors, '');
   assert.equal(output.includes('MOCK_CLI_KEY'), false);
   await assert.rejects(new Promise((resolve, reject) => {
@@ -69,6 +71,22 @@ test('CLI starts via env, relays mock request and SIGTERM closes listener', asyn
     socket.on('connect', () => { socket.destroy(); resolve(); });
     socket.on('error', reject);
   }));
+});
+
+test('CLI rejects invalid recovery and conversion options without exposing values', () => {
+  for (const env of [
+    { RHB_RESOURCE_ATTEMPTS: '0' },
+    { RHB_RETRY_DELAY_MS: '-1' },
+    { RHB_HISTORY_MODE: 'unknown' },
+    { RHB_UPSTREAM_PROTOCOL: 'unknown' },
+    { RHB_REASONING_SHAPE: 'unknown' },
+    { RHB_USER_AGENT: 'bad\r\nheader' }
+  ]) {
+    const result = spawnSync(process.execPath, [cli], { env: { ...process.env, RHB_UPSTREAM: 'http://127.0.0.1:1/v1', ...env }, encoding: 'utf8', timeout: 2000 });
+    assert.equal(result.status, 1);
+    assert.equal(result.stdout, '');
+    assert.doesNotMatch(result.stderr, /bad\r\nheader/);
+  }
 });
 
 test('CLI accepts no argv and does not expose unsafe URL or keys on startup error', () => {

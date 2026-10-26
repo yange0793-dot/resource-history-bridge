@@ -1,0 +1,55 @@
+{
+  "date": "2026-10-25",
+  "historical": true,
+  "supersededBehavior": "Empty-response retries and additional 422/502 errors were removed later on 2026-10-25 at the user's request. These results describe the earlier hashes, not the current revision.",
+  "branch": "feat/claude-codex-compat",
+  "platform": "macOS Darwin 22.6.0",
+  "clientVersions": { "claudeCode": "2.1.310", "codex": "0.162.1" },
+  "regression": [
+    { "node": "18.20.8", "tests": 366, "pass": 366, "fail": 0, "skip": 0 },
+    { "node": "22.23.3", "tests": 366, "pass": 366, "fail": 0, "skip": 0 },
+    { "node": "24.18.0", "tests": 366, "pass": 366, "fail": 0, "skip": 0 }
+  ],
+  "diffCheck": "passed",
+  "runtimeHashes": {
+    "lib/bridge.js": "63d88e58dd92d2ac86702697bad92f0c2964bd631a607ac81bd106a43e467bfb",
+    "lib/history.js": "c2cb85a42b5cef9837908ddbd893c20d8e898339a7e8384a989a888d97babe31",
+    "lib/messages.js": "224072a55cc1653d62b58861dc97897f0c3a39cd1dfe003a5454ebc10bb1ede8",
+    "lib/output.js": "0cf3eb3e573f9d60686ebd148c16c93faba2bf19064a9e3461e1e7176b97041e"
+  },
+  "actualCliMockExperiments": {
+    "claudeFirstEmpty": { "passed": true, "exit": 0, "upstreamRequests": 2 },
+    "claudeAlwaysEmpty": { "passed": true, "exit": 1, "visibleError": true, "durationMs": 501, "clientRequests": 2, "upstreamRequests": 4, "status": 422 },
+    "claudeReadContinuationEmpty": { "passed": true, "exit": 0, "answer": "RESULT_42", "upstreamRequests": 3, "sameRetryBytes": true },
+    "codexFirstEmpty": { "passed": true, "exit": 0, "upstreamRequests": 2 },
+    "codexAlwaysEmpty": { "passed": true, "exit": 1, "upstreamRequests": 2, "visibleError": true },
+    "codexToolContinuationEmpty": { "passed": true, "exit": 0, "commandExecutionExit": 0, "commandOutput": "42", "answer": "RESULT_42", "upstreamRequests": 3, "sameRetryBytes": true },
+    "codexResourceRecovery": { "passed": true, "mockOnly": true, "boundary": "Real Codex CLI against local mock error and mock recovery response; not natural Azure fault evidence." },
+    "codexCombinedResourceAndEmpty": { "passed": true, "mockOnly": true, "exit": 0, "commandExecutionExit": 0, "commandOutput": "42", "answer": "RESULT_42", "upstreamRequestsTotal": 4, "continuationAttempts": 3, "projectedEmptyRetryBytesIdentical": true, "customIdsRetained": true, "callIdsUnchanged": true }
+  },
+  "realUpstreamExperiments": {
+    "claudeTextAndReadContinuation": { "passed": true, "answers": ["CLAUDE_BRIDGE_OK", "RESULT_42"], "boundary": "Earlier same-session success; later optional-DONE, JSON validation and exhausted-empty changes separately tested." },
+    "codexBaseline": { "passed": true, "actualApiRequests": 3, "boundary": "Earlier frozen bridge baseline, not current Codex resource recovery." },
+    "earlyCodexOuterCandidateProjection": { "passed": true, "injectedFault": true, "answer": "RESULT_42", "boundary": "Outer experimental capture layer projected the history and real upstream accepted it; not current bridge recovery implementation." },
+    "currentCodexInjectedRecovery": { "passed": false, "actualApiRequests": 2, "toolCommandOutput": "42", "projectionMatches": true, "removedIds": 7, "failure": "Real upstream SSE rate-limit failure for eastus2; Codex showed error and exited 1.", "naturalAzureFault": false },
+    "discardedWrongPathHarness": { "passed": false, "actualApiRequests": 1, "response": "HTTP200 text/html", "boundary": "Temporary harness used /responses instead of verified /v1/responses; corrected harness, not bridge defect." }
+  },
+  "importantBehavior": {
+    "retryBudget": "At most one resource projection plus one empty replay, three upstream requests per incoming HTTP request; client retries are separate.",
+    "messagesEmptyExhausted": "422 api_error / empty_upstream_response. Claude Code retried 502 for 120 seconds without displaying the failure; 422 ends visibly but this version still makes one extra client request.",
+    "responsesEmptyExhausted": "502 resource_history_bridge_error / empty_upstream_response",
+    "unsupportedJsonTerminal": "Missing or nonterminal status, or completed JSON without an output array, fails explicitly instead of inventing message_stop.",
+    "optionalDone": "DONE after a valid terminal is accepted; DONE alone is not completion proof."
+  },
+  "evidenceLocations": {
+    "detailedLocalManifest": "/private/tmp/rhb-verification-20261025.json",
+    "claudeEmpty": "/var/folders/8q/4vx9jc6s4r73rp08_stwx30m0000gn/T/rhb-claude-empty-W4wyRv/summary.json",
+    "codexEmptyTool": "/var/folders/8q/4vx9jc6s4r73rp08_stwx30m0000gn/T/rhb-codex-empty-final-AKFCIx/summary.json",
+    "codexCurrentLive": "/var/folders/8q/4vx9jc6s4r73rp08_stwx30m0000gn/T/rhb-codex-final-live-RscX0J/summary.json",
+    "codexCombinedResourceEmpty": "/var/folders/8q/4vx9jc6s4r73rp08_stwx30m0000gn/T/rhb-codex-empty-final-UslvwD/summary.json",
+    "note": "Detailed evidence is local temporary data; this committed-ready manifest preserves the verified results and boundaries without credentials or user history."
+  },
+  "notVerified": ["Windows/PowerShell", "Linux", "GitHub CI", "natural Azure resource-fault recovery in current Codex mode", "all configuration managers", "all vendors", "long-term concurrency"],
+  "cleanup": { "ownedListenersRemaining": 0, "cliChildrenRemaining": 0, "existingServicesUntouched": true },
+  "delivery": { "committed": false, "pushed": false, "clientConfigsChanged": false, "liveServicesRestarted": false }
+}

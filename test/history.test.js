@@ -100,6 +100,223 @@ for (const [name, modify, code] of [
   });
 }
 
+function codexHistory() {
+  const body = history();
+  body.input[0].id = 'user-remove';
+  body.input.unshift({
+    type: 'additional_tools', id: 'tools-keep', role: 'developer',
+    tools: [{ type: 'custom', name: 'exec', description: 'Execute a script', format: { type: 'text' } }]
+  });
+  body.input.push(
+    { type: 'message', id: 'assistant-remove', role: 'assistant', phase: 'commentary', content: [{ type: 'output_text', text: 'Calculating.' }] },
+    { type: 'custom_tool_call', id: 'custom-keep', call_id: 'custom-call-keep', name: 'exec', input: 'print(19 + 23)\n', status: 'completed' },
+    { type: 'custom_tool_call_output', id: 'custom-output-keep', call_id: 'custom-call-keep', output: { stdout: '42', exit_code: 0 } }
+  );
+  return body;
+}
+
+function freeze(value) {
+  if (value && typeof value === 'object') {
+    for (const child of Object.values(value)) freeze(child);
+    Object.freeze(value);
+  }
+  return value;
+}
+
+test('explicit minimal mode preserves the default projection and refusals', () => {
+  assert.deepEqual(projectResponsesHistory(history(), { mode: 'minimal' }), projectResponsesHistory(history()));
+  const body = codexHistory();
+  assert.deepEqual(projectResponsesHistory(body, { mode: 'minimal' }), projectResponsesHistory(body));
+  assert.equal(projectResponsesHistory(body).code, 'unsupported_item_id');
+});
+
+test('default mode refuses retained Codex IDs when standard IDs are otherwise supported', () => {
+  const codex = codexHistory();
+  for (const item of [codex.input[0], codex.input[6], codex.input[7]]) {
+    const body = history();
+    body.input.push(structuredClone(item));
+    assert.equal(projectResponsesHistory(body).code, 'unsupported_item_id');
+  }
+});
+
+test('projection refuses unknown history modes without changing the body', () => {
+  const body = freeze(history());
+  for (const mode of ['automatic', '', null, 1]) {
+    const result = projectResponsesHistory(body, { mode });
+    assert.equal(result.ok, false);
+    assert.equal(result.code, 'unsupported_history_mode');
+  }
+});
+
+test('Codex projection removes only message and standard IDs from complete immutable history', () => {
+  const original = freeze(codexHistory());
+  const before = JSON.stringify(original);
+  const result = projectResponsesHistory(original, { mode: 'codex' });
+  assert.equal(result.ok, true);
+  assert.equal(result.removed, 4);
+  const expected = structuredClone(original);
+  for (const item of expected.input) {
+    if (['message', 'reasoning', 'function_call'].includes(item.type)) delete item.id;
+  }
+  assert.deepEqual(result.body, expected);
+  assert.equal(JSON.stringify(original), before);
+  assert.equal(result.body.input[0].id, 'tools-keep');
+  assert.equal(result.body.input[6].id, 'custom-keep');
+  assert.equal(result.body.input[7].id, 'custom-output-keep');
+  result.body.input[0].tools[0].description = 'Changed';
+  result.body.input[7].output.stdout = 'Changed';
+  assert.equal(original.input[0].tools[0].description, 'Execute a script');
+  assert.equal(original.input[7].output.stdout, '42');
+});
+
+for (const role of ['user', 'developer', 'system', 'assistant']) {
+  test(`Codex projection accepts a complete ${role} message`, () => {
+    const body = { model: 'mock-model', input: [{ type: 'message', id: 'remove', role, content: [{ type: 'input_text', text: 'Inline history' }] }] };
+    const result = projectResponsesHistory(body, { mode: 'codex' });
+    assert.equal(result.ok, true);
+    assert.equal(result.removed, 1);
+    assert.equal(Object.hasOwn(result.body.input[0], 'id'), false);
+  });
+}
+
+for (const phase of ['commentary', 'final_answer']) {
+  test(`Codex projection preserves known message phase ${phase}`, () => {
+    const body = codexHistory();
+    body.input[5].phase = phase;
+    const result = projectResponsesHistory(body, { mode: 'codex' });
+    assert.equal(result.ok, true);
+    assert.equal(result.body.input[5].phase, phase);
+  });
+}
+
+test('Codex projection accepts standard history and preserves complete unknown items without IDs', () => {
+  const body = history();
+  body.input.push({ type: 'future_type', payload: { id: 'nested-keep' } });
+  assert.deepEqual(projectResponsesHistory(body, { mode: 'codex' }), projectResponsesHistory(body));
+});
+
+test('Codex projection preserves complete inline image content and nested IDs', () => {
+  for (const image_url of ['data:image/png;base64,MOCK', 'https://example.invalid/image.png', 'http://example.invalid/image.png']) {
+    const body = { input: [{ type: 'message', id: 'remove', role: 'user', content: [{ type: 'input_image', image_url, detail: 'auto', metadata: { id: 'nested-keep' } }] }] };
+    const result = projectResponsesHistory(body, { mode: 'codex' });
+    assert.equal(result.ok, true);
+    assert.deepEqual(result.body.input[0].content, body.input[0].content);
+  }
+});
+
+test('Codex projection preserves recursive namespace, function and custom grammar schemas', () => {
+  for (const syntax of ['lark', 'regex']) {
+    const body = codexHistory();
+    body.input[0].tools = [{
+      type: 'namespace', name: 'functions', description: 'Execution tools',
+      tools: [
+        { type: 'custom', name: 'exec', description: 'Execute a script', format: { type: 'grammar', syntax, definition: 'start: /.+/', metadata: { id: 'grammar-keep' } } },
+        { type: 'namespace', name: 'nested', tools: [{ type: 'function', name: 'wait', strict: false, parameters: { type: 'object', properties: { duration: { type: 'number' } }, required: ['duration'], additionalProperties: false } }] }
+      ]
+    }];
+    freeze(body);
+    const result = projectResponsesHistory(body, { mode: 'codex' });
+    assert.equal(result.ok, true);
+    assert.deepEqual(result.body.input[0], body.input[0]);
+    assert.equal(result.body.input[0].tools[0].tools[1].tools[0].strict, false);
+  }
+});
+
+test('Codex projection preserves absent message phase and custom status without inventing fields', () => {
+  const body = codexHistory();
+  delete body.input[5].phase;
+  delete body.input[6].status;
+  const result = projectResponsesHistory(body, { mode: 'codex' });
+  assert.equal(result.ok, true);
+  assert.equal(Object.hasOwn(result.body.input[5], 'phase'), false);
+  assert.equal(Object.hasOwn(result.body.input[6], 'status'), false);
+});
+
+test('Codex custom outputs preserve string, object and null payloads without interpretation', () => {
+  for (const output of ['42', { stdout: '42' }, null]) {
+    const body = codexHistory();
+    body.input[7].output = output;
+    const result = projectResponsesHistory(body, { mode: 'codex' });
+    assert.equal(result.ok, true);
+    assert.deepEqual(result.body.input[7].output, output);
+    assert.equal(result.body.input[6].input, 'print(19 + 23)\n');
+  }
+});
+
+for (const [name, modify, code] of [
+  ['missing message role', b => { delete b.input[1].role; }, 'invalid_history_item'],
+  ['unknown message role', b => { b.input[1].role = 'tool'; }, 'invalid_history_item'],
+  ['missing message content', b => { delete b.input[1].content; }, 'invalid_history_item'],
+  ['empty message content', b => { b.input[1].content = []; }, 'invalid_history_item'],
+  ['string message content', b => { b.input[1].content = 'Not expanded'; }, 'invalid_history_item'],
+  ['unknown message phase', b => { b.input[5].phase = 'future_phase'; }, 'invalid_history_item'],
+  ['null message phase', b => { b.input[5].phase = null; }, 'invalid_history_item'],
+  ['invalid message ID', b => { b.input[1].id = null; }, 'invalid_history_item'],
+  ['non-object content', b => { b.input[1].content = ['text']; }, 'invalid_history_item'],
+  ['missing text payload', b => { b.input[1].content = [{ type: 'input_text' }]; }, 'invalid_history_item'],
+  ['referenced message content', b => { b.input[1].content = [{ type: 'item_reference', id: 'server' }]; }, 'invalid_history_item'],
+  ['unknown content type', b => { b.input[1].content = [{ type: 'future_content', data: 'opaque' }]; }, 'invalid_history_item'],
+  ['referenced image content', b => { b.input[1].content = [{ type: 'input_image', file_id: 'server' }]; }, 'invalid_history_item'],
+  ['incomplete image content', b => { b.input[1].content = [{ type: 'input_image' }]; }, 'invalid_history_item'],
+  ['relative image URL', b => { b.input[1].content = [{ type: 'input_image', image_url: 'image.png' }]; }, 'invalid_history_item'],
+  ['unsupported image URL scheme', b => { b.input[1].content = [{ type: 'input_image', image_url: 'file:///image.png' }]; }, 'invalid_history_item'],
+  ['empty data image', b => { b.input[1].content = [{ type: 'input_image', image_url: 'data:image/png;base64,' }]; }, 'invalid_history_item'],
+  ['mixed inline and server image content', b => { b.input[1].content = [{ type: 'input_image', image_url: 'data:image/png;base64,MOCK', file_id: 'server' }]; }, 'invalid_history_item'],
+  ['missing additional_tools ID', b => { delete b.input[0].id; }, 'invalid_history_item'],
+  ['wrong additional_tools role', b => { b.input[0].role = 'user'; }, 'invalid_history_item'],
+  ['missing additional_tools schemas', b => { delete b.input[0].tools; }, 'invalid_history_item'],
+  ['referenced additional_tools schema', b => { b.input[0].tools = ['server-tool']; }, 'invalid_history_item'],
+  ['empty additional_tools schema object', b => { b.input[0].tools = [{}]; }, 'invalid_history_item'],
+  ['unknown additional_tools schema type', b => { b.input[0].tools = [{ type: 'future_tool', name: 'exec' }]; }, 'invalid_history_item'],
+  ['missing function parameters', b => { b.input[0].tools = [{ type: 'function', name: 'wait' }]; }, 'invalid_history_item'],
+  ['referenced function parameters', b => { b.input[0].tools = [{ type: 'function', name: 'wait', parameters: 'server-schema' }]; }, 'invalid_history_item'],
+  ['missing namespace name', b => { b.input[0].tools = [{ type: 'namespace', tools: [] }]; }, 'invalid_history_item'],
+  ['missing namespace tools', b => { b.input[0].tools = [{ type: 'namespace', name: 'functions' }]; }, 'invalid_history_item'],
+  ['incomplete nested namespace tool', b => { b.input[0].tools = [{ type: 'namespace', name: 'functions', tools: [{}] }]; }, 'invalid_history_item'],
+  ['missing custom format', b => { b.input[0].tools = [{ type: 'custom', name: 'exec' }]; }, 'invalid_history_item'],
+  ['unknown custom format', b => { b.input[0].tools = [{ type: 'custom', name: 'exec', format: { type: 'future_format' } }]; }, 'invalid_history_item'],
+  ['missing grammar definition', b => { b.input[0].tools = [{ type: 'custom', name: 'exec', format: { type: 'grammar', syntax: 'lark' } }]; }, 'invalid_history_item'],
+  ['empty grammar definition', b => { b.input[0].tools = [{ type: 'custom', name: 'exec', format: { type: 'grammar', syntax: 'lark', definition: '' } }]; }, 'invalid_history_item'],
+  ['unknown grammar syntax', b => { b.input[0].tools = [{ type: 'custom', name: 'exec', format: { type: 'grammar', syntax: 'unknown', definition: 'start: /.+/' } }]; }, 'invalid_history_item'],
+  ['missing custom call ID', b => { delete b.input[6].id; }, 'invalid_tool_pair'],
+  ['missing custom call_id', b => { delete b.input[6].call_id; }, 'invalid_tool_pair'],
+  ['missing custom name', b => { delete b.input[6].name; }, 'invalid_tool_pair'],
+  ['missing custom input', b => { delete b.input[6].input; }, 'invalid_tool_pair'],
+  ['non-string custom input', b => { b.input[6].input = { script: 'print(42)' }; }, 'invalid_tool_pair'],
+  ['in-progress custom status', b => { b.input[6].status = 'in_progress'; }, 'invalid_tool_pair'],
+  ['incomplete custom status', b => { b.input[6].status = 'incomplete'; }, 'invalid_tool_pair'],
+  ['null custom status', b => { b.input[6].status = null; }, 'invalid_tool_pair'],
+  ['unknown custom status', b => { b.input[6].status = 'unknown'; }, 'invalid_tool_pair'],
+  ['missing custom output ID', b => { delete b.input[7].id; }, 'invalid_tool_pair'],
+  ['missing custom output payload', b => { delete b.input[7].output; }, 'invalid_tool_pair'],
+  ['missing custom output', b => { b.input.pop(); }, 'invalid_tool_pair'],
+  ['orphan custom output', b => { b.input.splice(6, 1); }, 'invalid_tool_pair'],
+  ['custom output before call', b => { [b.input[6], b.input[7]] = [b.input[7], b.input[6]]; }, 'invalid_tool_pair'],
+  ['duplicate custom call', b => { b.input.push(structuredClone(b.input[6])); }, 'invalid_tool_pair'],
+  ['duplicate custom output', b => { b.input.push(structuredClone(b.input[7])); }, 'invalid_tool_pair'],
+  ['cross-type duplicate call', b => { b.input[6].call_id = b.input[3].call_id; }, 'invalid_tool_pair'],
+  ['function output for custom call', b => { b.input[7] = { type: 'function_call_output', call_id: b.input[6].call_id, output: '42' }; }, 'invalid_tool_pair'],
+  ['custom output for function call', b => { b.input[4] = { type: 'custom_tool_call_output', id: 'keep', call_id: b.input[3].call_id, output: '42' }; }, 'invalid_tool_pair'],
+  ['unknown top-level ID type', b => { b.input.push({ type: 'future_type', id: 'unknown' }); }, 'unsupported_item_id'],
+  ['invalid standard tool output ID', b => { b.input[4].id = ''; }, 'invalid_item_id'],
+  ['server previous_response_id', b => { b.previous_response_id = 'server'; }, 'server_history_reference'],
+  ['server conversation', b => { b.conversation = { id: 'server' }; }, 'server_history_reference'],
+  ['server item reference', b => { b.input.push({ type: 'item_reference', id: 'server' }); }, 'item_reference'],
+  ['only retained IDs', b => { b.input = [b.input[0], b.input[6], b.input[7]]; }, 'no_supported_item_ids'],
+  ['no message or standard IDs', b => { for (const item of b.input) if (['message', 'reasoning', 'function_call'].includes(item.type)) delete item.id; }, 'no_supported_item_ids']
+]) {
+  test(`Codex projection refuses ${name} without changing history`, () => {
+    const body = codexHistory();
+    modify(body);
+    const before = JSON.stringify(body);
+    freeze(body);
+    const result = projectResponsesHistory(body, { mode: 'codex' });
+    assert.equal(result.ok, false);
+    assert.equal(result.code, code);
+    assert.equal(JSON.stringify(body), before);
+  });
+}
+
 test('SSE classifier holds only recognized empty lifecycle frames', () => {
   const frame = value => Buffer.from(`data: ${JSON.stringify(value)}\n\n`);
   assert.equal(classifyFrame(frame({ type: 'response.created', response: { id: 'response', output: [] } })), 'hold');

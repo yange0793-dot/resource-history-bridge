@@ -1,0 +1,93 @@
+{
+  "date": "2026-10-25",
+  "scope": "Independent bridge adaptation for DeepSeek Harness native PiAiAdapter openai-responses history. No client configuration changes or service restarts.",
+  "baseCommit": "a5523b67fd318b74765738579aad94f470069518",
+  "revision": "Uncommitted Harness adaptation; runtime identity is recorded by SHA-256 rather than claiming the base commit contains these changes.",
+  "runtimeHashes": {
+    "cli.js": "c6760c9e82884d35f7ecb324625649a2fdc2104f4297b93c02fdca3ce1538270",
+    "lib/bridge.js": "78f25528bf4dcfe7b09dc1defca103952041829590242f22f5cfd8ece4dbdc32",
+    "lib/history.js": "d7932ded3588bfa17d6fb9b783c56d7d2d6ac898d0efbfe79e2857e5c7ed1708",
+    "lib/messages.js": "639e78c458fc74129c3a6b4b3a0bc3a28beafc6326a8e936edfd4985a000e32b",
+    "lib/output.js": "0cf3eb3e573f9d60686ebd148c16c93faba2bf19064a9e3461e1e7176b97041e",
+    "scripts/verify-harness.mjs": "73b452e0a0b62c10a95918083d639406122c0f297afa0f785f0e05a54d6ca3f5"
+  },
+  "historyContract": {
+    "configuration": "RHB_HISTORY_MODE=harness or createBridge({ historyMode: 'harness' })",
+    "firstRequest": "Original native Responses request bytes are sent unchanged.",
+    "trigger": "Only the recognized Azure resource-bound history error before committed output.",
+    "removed": ["message.id", "reasoning.id", "function_call.id"],
+    "preserved": ["encrypted_content", "call_id", "tool names and arguments", "tool results", "existing custom/additional IDs", "model", "authentication", "session headers", "prompt_cache_key", "strict:false", "optional tool parameters"],
+    "nativeEasyMessages": "Untyped developer/system messages carry strings; user messages carry complete inline content arrays.",
+    "optionalItemIds": "Custom calls/results and inline additional_tools may omit IDs; present IDs must be valid and are retained.",
+    "replay": "Project once, then reuse identical projected bytes only for subsequent recognized pre-output resource errors, within the existing deadline and cancellation budget.",
+    "lastAttempt": "Return the actual last upstream error, without a synthetic recovery-exhausted status.",
+    "emptyOutput": "Pass through normal completed responses, without retries or additional empty-output errors. Native Harness empty policy is not modified.",
+    "unsupported": "Server references, item_reference, incomplete or unpaired history and unsupported top-level item IDs are not guessed or stripped.",
+    "otherModes": "Default minimal and existing codex contracts remain separate. Messages conversion and output runtime files are unchanged."
+  },
+  "localMacOS": [
+    { "node": "18.20.8", "tests": 410, "pass": 410, "fail": 0, "skip": 0, "reporter": "tap", "evidence": "/private/tmp/rhb-harness-final-18.20.8-isolated.tap", "durationMs": 1365.02334 },
+    { "node": "22.23.3", "tests": 410, "pass": 410, "fail": 0, "skip": 0, "reporter": "tap", "evidence": "/private/tmp/rhb-harness-final-22.23.3.tap", "durationMs": 3388.047912 },
+    { "node": "24.18.0", "tests": 410, "pass": 410, "fail": 0, "skip": 0, "reporter": "tap", "evidence": "/private/tmp/rhb-harness-final-24.18.0.tap", "durationMs": 3396.839578 }
+  ],
+  "retainedFailedRun": {
+    "node": "18.20.8",
+    "context": "Three complete Node-version suites and the installed-adapter probe were running concurrently.",
+    "tests": 410,
+    "pass": 409,
+    "fail": 1,
+    "test": "total deadline is shared across initial and recovery attempts",
+    "location": "test/bridge.test.js:422",
+    "failure": "Expected 2 upstream requests, observed 1. The pre-existing fixture delays the first response 40ms within a 70ms total deadline; this run finished the test after 103ms.",
+    "followup": "The entire unchanged Node 18 suite rerun alone passed 410/410. No runtime or timing-test change was made to force a pass; CPU contention is a possible explanation, not a proven cause.",
+    "evidence": "/private/tmp/rhb-harness-final-18.20.8.tap"
+  },
+  "installedAdapterProbe": {
+    "ok": true,
+    "startedAt": "2026-10-25T02:48:14.864Z",
+    "completedAt": "2026-10-25T02:48:15.302Z",
+    "platform": "darwin",
+    "node": "24.18.0",
+    "adapterVersion": "0.2.1-rc.1",
+    "piAiVersion": "1.1.0",
+    "adapterNodeRequirement": ">=22.19.0; this does not change the bridge's Node >=18 requirement",
+    "driver": "scripts/verify-harness.mjs",
+    "boundary": "Actual installed PiAiAdapter through its public plugin/API seam, native replayState and HTTP requests through the bridge to a loopback mock. Not the full Harness GUI and not a live AgentRouter experiment.",
+    "checks": 90,
+    "upstreamRequests": 14,
+    "failures": 0,
+    "nativeRuntimeHashes": {
+      "adapter": "cc4671266af974c4e78bcf0c65f5ef7651ca858ae5017392b1252dd4c2f234b5",
+      "piResponses": "8de25051531f131c4ae3d730f371fa0e15559ed7f865765a744c64d5edd2e067",
+      "piResponsesShared": "21fb0ec9278949ff00cb7af59849e5e3a8c278c807fedd1d7d6e27a024153bda"
+    },
+    "scenarios": [
+      { "name": "text", "attempts": 1, "result": "HARNESS_BRIDGE_OK" },
+      { "name": "tool-first", "attempts": 1, "result": "Native reasoning/text/tool call, encrypted_content backfilled from response.completed" },
+      { "name": "tool-continuation-one", "attempts": 3, "injectedResourceErrors": 2, "removedItemIds": 3, "result": "Second native tool call; first arithmetic result is 42" },
+      { "name": "tool-continuation-two", "attempts": 3, "injectedResourceErrors": 2, "removedItemIds": 6, "result": "RESULT_42 after two executed arithmetic tools" },
+      { "name": "resource-budget-exhausted", "attempts": 3, "result": "Actual last HTTP 400 JSON error returned unchanged" },
+      { "name": "unrelated-400", "attempts": 1, "result": "No projection/replay" },
+      { "name": "stream-output-no-replay", "attempts": 1, "result": "VISIBLE output followed by actual error; no replay" },
+      { "name": "valid-empty", "attempts": 1, "result": "Bridge relays normal completed SSE unchanged; installed adapter independently reports native EMPTY_RESPONSE" }
+    ],
+    "faultShape": "HTTP 400, Content-Type text/event-stream, complete JSON recognized Azure resource error, normal response end",
+    "nativeReplay": "finish.replayState v2 plus source.replayState; textSignature/thinkingSignature preserved without degradation",
+    "userProfilesOrCredentialsRead": false,
+    "installedRuntimeChanged": false,
+    "externalNetworkRequests": false,
+    "cleanup": { "bridgeListening": false, "upstreamListening": false, "fixtureSockets": 0 },
+    "rawLocalEvidence": "/private/tmp/rhb-harness-delivery-20261025.json"
+  },
+  "windows": {
+    "previousAdaptationCompleted": true,
+    "previousCiRun": 40153989577,
+    "previousCiUrl": "https://github.com/yange0793-dot/resource-history-bridge/actions/runs/40153989577",
+    "previousCiMatrix": "Ubuntu/macOS/Windows x Node 18/22/24: all 9 jobs passed, 382/382 per job, using mock upstreams.",
+    "currentHarnessRevisionExecutedOnWindows": false,
+    "currentHarnessLauncherTestAdded": true,
+    "boundary": "The previous CI proves the shared bridge core and Windows launcher adaptation, not execution of this unpushed Harness revision or the installed Windows Harness adapter. Reproducing the intermittent upstream fault is not an adaptation gate."
+  },
+  "notVerified": ["Full Harness GUI end-to-end with this bridge", "Natural AgentRouter fault recovery in Harness", "Current Harness revision on Windows CI or installed Windows Harness", "All vendors, native history types, long mixed histories or sustained concurrent workloads", "Unexplained PI_AI_ERROR or rate limits; empty output is intentionally not repaired"],
+  "delivery": { "committed": false, "pushed": false, "mergedMain": false, "clientConfigsChanged": false, "installedClientPatched": false, "existingServicesRestarted": false }
+}
