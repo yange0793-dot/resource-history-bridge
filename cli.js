@@ -54,6 +54,8 @@ async function main() {
     reasoningShape: process.env.RHB_REASONING_SHAPE,
     historyMode,
     historyStrategy,
+    transparentRecovery: booleanFromEnv('RHB_TRANSPARENT_RECOVERY', historyMode !== 'minimal'),
+    automaticRecovery: booleanFromEnv('RHB_AUTOMATIC_RECOVERY', harness),
     generic400Projection: booleanFromEnv('RHB_GENERIC_400_PROJECTION', harness),
     timeoutMs: numberFromEnv('RHB_TIMEOUT_MS', 180000),
     totalAttempts: numberFromEnv('RHB_TOTAL_ATTEMPTS', 10),

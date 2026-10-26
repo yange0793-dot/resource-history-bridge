@@ -133,6 +133,8 @@ test('CLI defaults to the official AgentRouter URL without contacting it', () =>
   assert.equal(options.historyMode, 'auto');
   assert.equal(options.upstreamProtocol, 'auto');
   assert.equal(options.generic400Projection, false);
+  assert.equal(options.transparentRecovery, true);
+  assert.equal(options.automaticRecovery, false);
   assert.match(result.stdout, /Upstream: https:\/\/agentrouter\.org\n/);
   assert.match(result.stdout, /Client: auto; history: auto; protocol: auto; auth source: client/);
 });
@@ -147,15 +149,24 @@ test('CLI wires each client preset with final history-mode recovery defaults', (
     assert.equal(options.upstreamProtocol, upstreamProtocol);
     assert.equal(options.retryDelayMs, historyMode === 'harness' ? 250 : 1000);
     assert.equal(options.generic400Projection, historyMode === 'harness');
+    assert.equal(options.transparentRecovery, historyMode !== 'minimal');
+    assert.equal(options.automaticRecovery, historyMode === 'harness');
   }
   const minimal = configuredOptions({ RHB_CLIENT: 'harness', RHB_HISTORY_MODE: 'minimal', RHB_UPSTREAM_PROTOCOL: 'responses' });
   assert.equal(minimal.historyMode, 'minimal');
   assert.equal(minimal.upstreamProtocol, 'responses');
   assert.equal(minimal.retryDelayMs, 1000);
   assert.equal(minimal.generic400Projection, false);
+  assert.equal(minimal.transparentRecovery, false);
+  assert.equal(minimal.automaticRecovery, false);
   const harness = configuredOptions({ RHB_CLIENT: 'codex', RHB_HISTORY_MODE: 'harness' });
   assert.equal(harness.retryDelayMs, 250);
   assert.equal(harness.generic400Projection, true);
+  assert.equal(harness.transparentRecovery, true);
+  assert.equal(harness.automaticRecovery, true);
+  assert.equal(configuredOptions({ RHB_TRANSPARENT_RECOVERY: '0' }).transparentRecovery, false);
+  assert.equal(configuredOptions({ RHB_AUTOMATIC_RECOVERY: '1', RHB_CLIENT: 'codex' }).automaticRecovery, true);
+  assert.equal(configuredOptions({ RHB_AUTOMATIC_RECOVERY: '0', RHB_CLIENT: 'harness' }).automaticRecovery, false);
 });
 
 test('CLI rejects unsafe upstreams and invalid clients before creating the bridge', () => {

@@ -355,11 +355,13 @@ test('converted Messages may replay no-ID validated history but never drop encry
 });
 
 for (const payload of [{ error: { type: 'server_error' } }, { status: 'completed', output: [] }, { status: 'failed', output: [], error: null }]) {
-  test('automatic history selection alone never enables transient or empty replays', () => {
-    const decision = session().decide(failure(payload, { statusCode: payload.error?.type ? 503 : 200 }));
-    assert.equal(decision.retry, false);
+  const transient = payload.error?.type === 'server_error';
+  test(`automatic history selection ${transient ? 'retries only the explicit transient envelope' : 'never replays an empty terminal'}`, () => {
+    const decision = session().decide(failure(payload, { statusCode: transient ? 503 : 200 }));
+    assert.equal(decision.retry, transient);
     assert.equal(decision.lossy, false);
-    assert.equal(decision.nextState.attempt, 1);
+    assert.equal(decision.nextState.attempt, transient ? 2 : 1);
+    if (!transient) assert.match(decision.reason, /^empty_response_/);
   });
 }
 

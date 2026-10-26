@@ -56,6 +56,20 @@ CLI 和启动脚本都不询问客户端。未设置模式时统一默认 auto�
 
 `auto` / `generic` / `codex` / Messages 默认资源预算为单个输入 HTTP 请求最多 10 次上游调用、1 秒固定间隔、共用 180 秒总时限与取消信号。只重复约定资源错误；不因普通限流、认证、schema、内容过滤或空完成盲重放。耗尽返回实际最后上游错误；若没有可转发的响应，则呈现传输/超时错误。旧显式 minimal 的不可投影历史可能返回明确本地拒绝错误，而不是删字段兜底。客户端或外层代理另发 HTTP 请求不属于该预算。
 
+### 透明恢复（默认开启）
+
+`transparentRecovery` 默认在 `auto` / `codex` / `harness` 原生 `/responses` 上开启，`minimal` 默认关闭；显式布尔值优先，`minimal` 也可显式开启。`RHB_TRANSPARENT_RECOVERY` 与此对应。`automaticRecovery`（`RHB_AUTOMATIC_RECOVERY`，桥默认仅 `harness`）仍是独立的旧空终态/连续恢复选项，两者共用同一预算：每次输入 HTTP 请求最多 10 次上游调用、transient 含首轮最多 3 次、resource 最多 10 次、180 秒总时限，退避尊重 `Retry-After`。
+
+- 只对**已输出的确定性可重试故障**隐藏重试：官方 AgentRouter 目标的 HTTP 408 / 409 / 临时 429 / 5xx，以及无终态载荷的输出前连接失败。中间错误不交给客户端，耗尽时转发实际最后一次上游响应；本来没有响应时仍呈现传输/超时错误。
+- 认证、权限、schema/参数、内容过滤、额度/计费（402 或明确 `insufficient_quota` 等）、上下文超限、策略拦截、泛化 400 一律不重试，按原样返回。
+- 合法空完成、无错误细节的 failed empty、仅 lifecycle 的干净 EOF 不因透明恢复重试；这些仍只由显式 `automaticRecovery` 处理。
+- Messages → Responses 转换请求不在默认范围，保留旧单次语义；Claude Code 的客户端重试不被桥叠加上第二层。
+- 任何正文（含空白）、推理、工具、未知帧或下游提交后都停止重试；只有退出前不携带 `data`/`event`/未知字段的纯 SSE 注释心跳视为传输元数据，不作为输出屏障。其余注释、未知与坏帧仍是屏障。
+- 不可投影但完整合法的历史（例如带 id 的已完成 `web_search_call`）按“原字节重试”处理：保留首个请求的精确字节、认证、模型、会话与 cache 身份，不删除内置项 ID，也不声称完成投影。决策以 `projectionSkipped: {reason}` 单独标记，重试原因是 `unprojected_resource_retry`。来源不完整、`item_reference`、服务端引用、工具缺配对、未完成内置项或带未知字段的历史都不进入该回退。
+- 显式设置超出透明预算的旧配置（如 `resourceAttempts > 10`、`timeoutMs > 180000`、`retryDelayMs > 2000`）会被识别为旧资源恢复配置，透明恢复在该实例上默认关闭，避免旧部署启动即报错；需要新行为时显式设置 `transparentRecovery: true`。
+
+透明重试只恢复**当前请求**；它不能代替客户端开启下一个 turn。客户端在原生重试耗尽后的自动续跑是独立能力，见[客户端续跑](continuation.md)，需要宿主提供会话状态接口。
+
 ### 严格 AgentRouter 历史错误
 
 仅当**直接配置的固定上游 URL 主机**为 `agentrouter.org` 或 `ps.air-outer.com`，HTTP 状态为 400，才接受这条窄规则：
@@ -202,6 +216,8 @@ async function main() {
 | RHB_MAX_RETRY_DELAY_MS | 2000，1–2000 | Harness 本地退避上限；不压短 Retry-After |
 | RHB_RETRY_JITTER_RATIO | 0.2，0–1 | Harness 随机扰动 |
 | RHB_HISTORY_STRATEGY | on-error；portable | portable 显式提前投影 |
+| RHB_TRANSPARENT_RECOVERY | auto/codex/harness 为 true，minimal 为 false | 透明恢复开关；true/false/1/0 |
+| RHB_AUTOMATIC_RECOVERY | harness 为 true，其他 false | 旧空终态/连续恢复选项，与透明恢复共预算 |
 | RHB_GENERIC_400_PROJECTION | Harness true，其他 false | Harness 受限泛化 400 候选；true/false/1/0 |
 | RHB_DIAGNOSTICS_PATH | 未设置 | 启用有界脱敏 JSONL，默认关闭 |
 | RHB_DIAGNOSTICS_MAX_BYTES | 1048576，1–16MiB | 单个诊断文件上限 |

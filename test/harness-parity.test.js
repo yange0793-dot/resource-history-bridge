@@ -127,7 +127,6 @@ for (const prefix of [
   frame({ type: 'response.reasoning_text.delta', delta: '\n' }),
   frame({ type: 'response.output_item.added', item: { type: 'function_call', name: 'Read', call_id: 'call', arguments: '' } }),
   frame({ type: 'response.future_event', value: 'unknown' }),
-  ': ping\n\n',
   'data: {"type":"response.output_text.delta","delta":"'
 ]) test('output/unknown/partial SSE before clean EOF remains an exact no-replay barrier', async t => {
   const original = lifecycle + prefix;
@@ -136,11 +135,22 @@ for (const prefix of [
   assert.equal(f.requests.length, 1);
 });
 
+test('a comment-only heartbeat is transport metadata, not a replay barrier', async t => {
+  const original = lifecycle + ': ping\n\n';
+  const f = await fixture(t, () => original);
+  assert.equal((await post(f.address)).text, original);
+  assert.equal(f.requests.length, 3);
+  for (const received of f.requests) assert.deepEqual(received.bytes, raw);
+});
+
 for (const mode of ['minimal', 'codex']) test(`${mode} clean EOF and unnamed SSE error keep single-attempt defaults`, async t => {
-  for (const original of ['', lifecycle, frame({ error: { code: 'rate_limit_exceeded' } })]) {
+  // A clean empty EOF is not a transient failure in either mode; the unnamed
+  // rate-limit envelope is retried only where transparent recovery is on.
+  const rateLimit = frame({ error: { code: 'rate_limit_exceeded' } });
+  for (const original of ['', lifecycle, rateLimit]) {
     const f = await fixture(t, () => original, { historyMode: mode });
     assert.equal((await post(f.address)).text, original);
-    assert.equal(f.requests.length, 1);
+    assert.equal(f.requests.length, original === rateLimit && mode === 'codex' ? 3 : 1);
   }
 });
 

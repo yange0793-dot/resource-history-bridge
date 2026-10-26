@@ -344,7 +344,6 @@ for (const prefix of [
   frame('response.output_item.added', { item: { type: 'function_call', call_id: 'call_new', name: 'Read', arguments: '' } }),
   frame('response.function_call_arguments.delta', { delta: ' ' }),
   frame('future.event', { payload: 'UNKNOWN' }),
-  ': ping\n\n',
   'unknown raw bytes\n\n'
 ]) test('output, whitespace, reasoning, tools or unknown SSE before cipher rejection prohibit replay', async t => {
   const original = lifecycle + prefix + failed;
@@ -353,6 +352,14 @@ for (const prefix of [
   assert.equal(result.text, original);
   assert.equal(f.requests.length, 1);
   assert.equal(result.headers['x-rhb-recovery'], undefined);
+});
+
+test('a comment-only heartbeat before a cipher failure is metadata and not a replay barrier', async t => {
+  const original = lifecycle + ': ping\n\n' + failed;
+  const f = await fixture(t, (_req, res) => send(res, 200, original, 'text/event-stream'), { historyMode: 'harness' });
+  const result = await post(f.address);
+  assert.equal(result.text, original);
+  assert.equal(f.requests.length, 2);
 });
 
 for (const suffix of ['unknown tail', 'data: {"type":"response.failed"', frame('future.event', { payload: 'UNKNOWN' }), frame('response.output_text.delta', { delta: 'TRAILING' })]) {

@@ -182,7 +182,7 @@ for (const [mode, automaticRecovery, status] of [
   assert.deepEqual(f.requests[0].bytes, Buffer.from(body));
 });
 
-for (const mode of ['minimal', 'codex']) test(`${mode} default does not inherit Harness transient, empty or EOF recovery`, async t => {
+for (const mode of ['minimal', 'codex']) test(`${mode} default ${mode === 'codex' ? 'adds only transparent transient retry' : 'keeps'} and never inherits Harness empty or EOF recovery`, async t => {
   for (const [status, text, type] of [
     [503, transient, 'application/json'],
     [200, frame({ type: 'response.completed', response: { status: 'completed', output: [] } }), 'text/event-stream'],
@@ -192,7 +192,7 @@ for (const mode of ['minimal', 'codex']) test(`${mode} default does not inherit 
     const result = await post(f.address);
     assert.equal(result.status, status);
     assert.equal(result.text, text);
-    assert.equal(f.requests.length, 1);
+    assert.equal(f.requests.length, mode === 'codex' && status === 503 ? 3 : 1);
   }
 });
 

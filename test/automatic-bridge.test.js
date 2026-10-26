@@ -147,7 +147,7 @@ for (const [name, mutate] of [
   ['unknown result field', b => { b.input[5].future_output = 'UNKNOWN'; }],
   ['incomplete tool pair', b => { b.input.pop(); }],
   ['server-side history', b => { b.previous_response_id = 'server_reference'; }]
-]) test(`default automatic projection refuses ${name} and retains actual exact upstream response`, async t => {
+]) test(`default transparent recovery still refuses ${name} and retains the actual exact upstream response`, async t => {
   const f = await fixture(t, (_req, res) => send(res, 400, resource));
   const body = history(); mutate(body);
   const raw = Buffer.from(' \n' + JSON.stringify(body, null, 2));
@@ -160,6 +160,53 @@ for (const [name, mutate] of [
   assert.deepEqual(f.requests[0].bytes, raw);
 });
 
+test('default transparent recovery replays an unprojectable builtin search item without altering one byte', async t => {
+  const body = history();
+  body.input.push({ type: 'web_search_call', id: 'ws_builtin', status: 'completed', action: { type: 'search', query: 'synthetic' } });
+  const raw = Buffer.from(' \n' + JSON.stringify(body, null, 2));
+  const f = await fixture(t, (_req, res) => send(res, 400, resource));
+  const result = await request(f.address, { body: raw });
+  assert.equal(result.status, 400);
+  assert.deepEqual(result.bytes, resource);
+  assert.equal(f.requests.length, 4);
+  for (const received of f.requests) {
+    assert.deepEqual(received.bytes, raw);
+    assert.equal(received.headers.authorization, identity.authorization);
+  }
+});
+
+for (const [name, mutate] of [
+  ['unknown message field', b => { b.input[2].future_output = 'UNKNOWN'; }],
+  ['unknown easy field', b => { b.input[0].future_role = 'UNKNOWN'; }],
+  ['unknown text-part field', b => { b.input[2].content[0].future_text = 'UNKNOWN'; }],
+  ['unknown reasoning field', b => { b.input[3].future_content = 'UNKNOWN'; }],
+  ['unknown tool call field', b => { b.input[4].future_arguments = 'UNKNOWN'; }],
+  ['unknown result field', b => { b.input[5].future_output = 'UNKNOWN'; }],
+  ['incomplete tool pair', b => { b.input.pop(); }],
+  ['server-side history', b => { b.previous_response_id = 'server_reference'; }]
+]) test(`explicit transparentRecovery:false keeps ${name} a single unchanged attempt`, async t => {
+  const f = await fixture(t, (_req, res) => send(res, 400, resource), { transparentRecovery: false });
+  const body = history(); mutate(body);
+  const raw = Buffer.from(' \n' + JSON.stringify(body, null, 2));
+  const result = await request(f.address, { body: raw });
+  assert.equal(result.status, 400);
+  assert.deepEqual(result.bytes, resource);
+  assert.equal(f.requests.length, 1);
+  assert.deepEqual(f.requests[0].bytes, raw);
+});
+
+for (const [name, status, bytes, type] of [
+  ['rate limit', 429, Buffer.from('{"error":{"type":"rate_limit_error"}}'), 'application/json'],
+  ['server error', 503, Buffer.from('{"error":{"type":"server_error"}}'), 'application/json']
+]) test(`default transparent recovery hides repeated ${name} failures and returns the final upstream response`, async t => {
+  const f = await fixture(t, (_req, res) => send(res, status, bytes, type));
+  const native = await request(f.address);
+  assert.equal(native.status, status);
+  assert.deepEqual(native.bytes, bytes);
+  assert.equal(f.requests.length, 3);
+  for (const received of f.requests) assert.deepEqual(received.bytes, f.requests[0].bytes);
+});
+
 for (const [name, status, bytes, type] of [
   ['rate limit', 429, Buffer.from('{"error":{"type":"rate_limit_error"}}'), 'application/json'],
   ['server error', 503, Buffer.from('{"error":{"type":"server_error"}}'), 'application/json'],
@@ -167,7 +214,20 @@ for (const [name, status, bytes, type] of [
   ['failed empty', 200, frame('response.failed', { response: { status: 'failed', output: [], error: null } }), 'text/event-stream'],
   ['metadata EOF', 200, lifecycle, 'text/event-stream'],
   ['generic400', 400, Buffer.from('{"error":{"type":"invalid_request_error","message":"Bad request."}}'), 'application/json']
-]) test(`default auto history never enables Harness ${name} recovery`, async t => {
+]) test(`explicit transparentRecovery:false keeps ${name} a single unchanged attempt`, async t => {
+  const f = await fixture(t, (_req, res) => send(res, status, bytes, type), { transparentRecovery: false });
+  const native = await request(f.address);
+  assert.equal(native.status, status);
+  assert.deepEqual(native.bytes, bytes);
+  assert.equal(f.requests.length, 1);
+});
+
+for (const [name, status, bytes, type] of [
+  ['completed empty', 200, empty, 'text/event-stream'],
+  ['failed empty', 200, frame('response.failed', { response: { status: 'failed', output: [], error: null } }), 'text/event-stream'],
+  ['metadata EOF', 200, lifecycle, 'text/event-stream'],
+  ['generic400', 400, Buffer.from('{"error":{"type":"invalid_request_error","message":"Bad request."}}'), 'application/json']
+]) test(`default auto still treats ${name} as a single completed response`, async t => {
   const f = await fixture(t, (_req, res) => send(res, status, bytes, type));
   const native = await request(f.address);
   assert.equal(native.status, status);

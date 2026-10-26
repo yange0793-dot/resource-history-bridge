@@ -105,14 +105,26 @@ test('repeated resource failure returns the actual final upstream error, not a n
   assert.equal(f.requests.length, 3);
 });
 
-test('only resource errors are replayed after projection; rate limits and empty output stop replay', async t => {
+test('resource-only recovery replays only resource errors; rate limits and empty output stop replay', async t => {
   for (const [status, body] of [[429, '{"error":{"message":"mock rate limit"}}'], [200, frame('response.completed', { response: { status: 'completed', output: [] } })]]) {
-    const f = await fixture(t, (res, n) => send(res, n === 1 ? 400 : status, n === 1 ? error : body));
+    const f = await fixture(t, (res, n) => send(res, n === 1 ? 400 : status, n === 1 ? error : body), { transparentRecovery: false });
     const result = await post(f.address);
     assert.equal(result.status, status);
     assert.equal(result.text, body);
     assert.equal(f.requests.length, 2);
   }
+});
+
+test('transparent recovery retries a transient failure after projection but not a legitimate empty completion', async t => {
+  const limited = await fixture(t, (res, n) => send(res, n === 1 ? 400 : 429, n === 1 ? error : '{"error":{"message":"mock rate limit"}}'));
+  assert.equal((await post(limited.address)).status, 429);
+  assert.equal(limited.requests.length, 4);
+  assert.deepEqual(limited.requests[0].bytes, Buffer.from(JSON.stringify(history)));
+  for (const entry of limited.requests.slice(1)) assert.deepEqual(entry.bytes, limited.requests[1].bytes);
+  const emptyBody = frame('response.completed', { response: { status: 'completed', output: [] } });
+  const empty = await fixture(t, (res, n) => send(res, n === 1 ? 400 : 200, n === 1 ? error : emptyBody));
+  assert.equal((await post(empty.address)).status, 200);
+  assert.equal(empty.requests.length, 2);
 });
 
 test('known SSE failure can retry repeatedly before any output', async t => {
@@ -141,10 +153,17 @@ test('Messages with no removable IDs can replay unchanged converted history on a
 });
 
 test('request deadline cancels retry delay without issuing another upstream call', async t => {
+  // Transparent recovery relays the actual last upstream response, so the client
+  // sees the real 400 rather than a synthetic gateway timeout.
   const f = await fixture(t, res => send(res, 400, error), { timeoutMs: 60, retryDelayMs: 1000 });
   const result = await post(f.address);
-  assert.equal(result.status, 504);
+  assert.equal(result.status, 400);
+  assert.equal(result.text, error);
   assert.equal(f.requests.length, 1);
+  // Resource-only clients keep the legacy synthetic 504 for a stalled deadline.
+  const legacy = await fixture(t, res => send(res, 400, error), { timeoutMs: 60, retryDelayMs: 1000, transparentRecovery: false });
+  assert.equal((await post(legacy.address)).status, 504);
+  assert.equal(legacy.requests.length, 1);
 });
 
 test('bridge close cancels an in-flight retry delay', async t => {
