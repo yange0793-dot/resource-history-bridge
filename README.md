@@ -72,7 +72,7 @@ node --test
 
 测试使用 loopback mock，不需要真实 key。恢复用例保留官方目标 URL，测试专用传输映射将请求送到本机 mock；其他目标的透传用例检查原始字节、单次请求、状态与协议不被改变。
 
-当前自动/嵌入/后台改造在本机 macOS Node.js 18.20.8 / 22.23.3 / 24.18.0 各通过 **1418/1418**，含默认自动入口、嵌入预算与原始字节检查、42 项服务管理用例。安装版 Harness 原有 71＋91 项及默认自动入口两轮加密 reasoning 的 25 项故障注入检查通过，临时连接已关闭。见 [当版验证记录](docs/verification-automatic-runtime-20261026.json)。首轮一项旧默认测试失败已保留记录，改为显式 passthrough 并增加字节/认证断言后重跑通过，未改运行代码。当前改造尚未提交、推送或部署；未改 Mixrouter 或客户端配置。服务管理采用注入的原生后端与真实仓库 dry-run，尚未验证真实用户会话的安装/登录自启，也未跑本版 Windows/Linux CI。
+当前自动/嵌入/后台改造在本机 macOS Node.js 18.20.8 / 22.23.3 / 24.18.0 各通过 **1418/1418**，含默认自动入口、嵌入预算与原始字节检查、42 项服务管理用例。安装版 Harness 原有 71＋91 项及默认自动入口两轮加密 reasoning 的 25 项故障注入检查通过，临时连接已关闭。见 [当版验证记录](docs/verification-automatic-runtime-20261026.json)。首轮一项旧默认测试失败已保留记录，改为显式 passthrough 并增加字节/认证断言后重跑通过，未改运行代码。当前改造已提交并推送到 `feat/automatic-embedded-runtime-20261026`，未合入 main 或部署，未改 Mixrouter 或客户端配置。[修复后 CI](https://github.com/yange0793-dot/resource-history-bridge/actions/runs/40291204080) 九个作业全部成功：Linux/macOS × 三版 Node 各 1421/1421；Windows × 三版 Node 各 1420 通过、0 失败、1 项符号链接权限测试明确跳过，PowerShell5.1 启动测试各 13/13。首轮 Windows 文件事务与日志测试清理失败记录保留，修后服务定向检查各 45/45。服务管理仍采用注入的原生后端与真实仓库 dry-run，尚未验证真实用户会话的服务安装/登录自启。
 
 以下为自动/嵌入/后台改造前的加密 reasoning 版本证据，不作为当前改造验证：加密 reasoning 降级版本已在本机 Node.js 18/22/24 各通过 **1078/1078**，其中新增故障与安全边界测试 132 项。安装版 Harness 原有 71＋91 项检查通过；新增两轮工具续接故障注入的 25 项检查通过，覆盖保留可读摘要和省略纯密文 reasoning，原历史不改、临时连接全部关闭。见 [本次验证记录](docs/verification-encrypted-reasoning-20261026.json)。已提交并推送到 `feat/encrypted-reasoning-recovery-20261026`，[本版跨平台 CI](https://github.com/yange0793-dot/resource-history-bridge/actions/runs/40272685786) 的 Windows/macOS/Linux × Node18/22/24 九个组合全部通过，含 Windows PowerShell5.1 实际启动检查。尚未合入 `main` 或部署，未改客户端配置或重启服务，也未复现自然 AgentRouter 解密故障。
 

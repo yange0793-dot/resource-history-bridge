@@ -31,7 +31,7 @@
     "lib/encrypted-reasoning.js": "171e511ebed0db635a9aa6b256376d9d54578600116551fc8e4e796023ffde94",
     "lib/recovery-session.js": "e0c9d448936387c9340b1f9aa5680e2c55323a612627457eca12cbb71ee69915",
     "lib/request-profile.js": "1133590fc7946eee58a2de172d94bc5fd8907308254878673fc259bf839c9581",
-    "lib/service-manager.js": "1edeca23d221076edbcd3adf629419665d0ec5560e56c4351af9d2a3998f93e3",
+    "lib/service-manager.js": "88b403536df6a4a19c5f05462535fa7286c9283b42a793f371a8eab027faccbf",
     "service-cli.js": "5176bd2a324873ca550650a44fc130a7687285fff472fe7a2fa466602ab8a6ab",
     "scripts/start-macos.command": "9476136e2606a736884afa119b167b70348c1fea0ee0fde2e1ebacbe5c36a195",
     "scripts/start-windows.ps1": "755376b364ba3fdc29027a59f480ae4405542e2ac5a993b0ba478cd27f1068c7",
@@ -39,7 +39,7 @@
     "test/automatic-cli.test.js": "71810a163cdb25a479c298dd88aeb1d46e9b01f59589ff8453653babe1877b69",
     "test/automatic-history.test.js": "5ab7660c07a8b66043675a1f8bb7e2a95cf5970b04093a48e66edac735db724a",
     "test/recovery-session.test.js": "68258074e852cd7852d031a24135839a47cfa58dbd25a788a6c042f3bc8d1ce3",
-    "test/service-manager.test.js": "86eca4047185ac2f276e6aab76ca4f68f73ea33d170e0d24a1c2047d3ccf70a6",
+    "test/service-manager.test.js": "b6670ef51b08b98dcb32a60ed474fbb3c2053c93d691ecc186d71b258df59335",
     "test/compat.test.js": "46f2a90eb3f76afdb9ea772c220f4e131c513c1052c35049b786ac3c86aeac1e"
   },
   "unchangedDuringVerification": true,
@@ -80,7 +80,16 @@
     "pinnedOriginalProbeHash": "a28e7a528b647a968706fa0616c51e8b5a148681a7edeba613d5adc0a708ca26"
   },
   "serviceVerification": {
-    "tests": 42,
+    "tests": 45,
+    "previousFullLocalMatrix": "The recorded 1418/1418 macOS runs predate the isolated service correction. Core and installed-adapter evidence is reused unchanged; only service-manager.js and its test changed afterward.",
+    "correctionCommit": "f51df40e14baaa2ca40bc9b1ec62e9787b556b3a",
+    "correction": "Use a writable non-truncating r+ file descriptor for fsync; retain wx/0600/fsync/exclusive atomic publish and ownership safeguards. Close the two VM log descriptors in the test fixture before Windows cleanup.",
+    "oldImplementationRegression": {"tests": 3, "pass": 0, "fail": 3, "code": "INSTALL_FAILED", "method": "Test-process-only preload substitutes the prior read-only open flag; repository files were not rewritten."},
+    "focusedLocalMacOS": [
+      {"node": "18.20.8", "tests": 45, "pass": 45, "fail": 0, "skip": 0, "cancelled": 0},
+      {"node": "22.23.3", "tests": 45, "pass": 45, "fail": 0, "skip": 0, "cancelled": 0},
+      {"node": "24.18.0", "tests": 45, "pass": 45, "fail": 0, "skip": 0, "cancelled": 0}
+    ],
     "nativeBackends": "Injected macOS/Linux/Windows service managers and metadata fixtures; temporary local files only",
     "covers": ["exact local release/manifest/bootstrap/definition ownership", "native action and current-user identity", "port conflicts", "startup and stop deadlines", "macOS bootout registration semantics", "rollback and modified/foreign-file preservation", "operation lock", "pre-Node environment cleanup", "systemd dollar/space/percent escaping", "Windows 1MiB append cap"],
     "actualRepositoryMacOSDryRun": {"pass": true, "files": 26, "nativeCommandsPlanned": 1, "nativeCommandsExecuted": 0, "releaseId": "0.1.0-b9e79cf818e49fb6", "port": 8790},
@@ -99,15 +108,52 @@
     "installed-harness-auto-encrypted.json": "f412963ba3f5220b61831b5fc24a9785521b1a3f4f9aa57367eb484a6c0580d5",
     "service-dry-run-final.json": "7d96d9b864357a4dd96e5c9292c57d9a99e90b8978ceea858fb85632c3e2ed86",
     "first-full-run/verification.json": "3b5df6a208d0f01a520b83054b422a1b6d5d29427699f7198074cd6af23e376c",
-    "first-full-run/matrix-v18.20.8.tap": "8e43576bfcb0833df6e1abd7df178d09bda25273563fd0296dd05265cf2904fc"
+    "first-full-run/matrix-v18.20.8.tap": "8e43576bfcb0833df6e1abd7df178d09bda25273563fd0296dd05265cf2904fc",
+    "service-correction-verification.json": "4874d32619a39971c9ee4890ed021d9bc5ebf767dbc5f942cfd0b4a4bbac55be",
+    "service-windows-fix/old-readonly-flush-regression.tap": "01273f77b191f1bb3e04a67d7e958522fc39f8965b325ae8f7e7b60a5cd00866",
+    "github-ci-initial-summary.json": "7fe38f337f34a08c71a6e095040a1fdd5d50f1d204839740f22ddbd1446f55d4",
+    "github-ci-initial-result.json": "dc879db38ad629db1af111b7a96c30dd1803a9f527afa6b9fcbfbfd145729d78",
+    "github-ci-initial-logs.txt": "cd719c8e14e2917497a8f21673eebfa726c622d8447ff6ac81c900b3592899d6",
+    "github-ci-correction-summary.json": "8b3990e4b6bc5e5f3d7bf3a6d2564542cdb83384c639a2e2ef935f19f4d1e79d",
+    "github-ci-correction-result.json": "be62ecf6fe9e325164ff1e5ff8008b36d112396f0f2041f3c2ac25a1155b729c",
+    "github-ci-correction-logs.txt": "254872ce12e5207c01d8adfbe5ad54d4db679ea64a00f5a10060bd94d57ebb66"
   },
   "testTransport": "Official configured targets mapped to loopback mocks by test-only helpers; other-target tests inspect unchanged passthrough. No production declaration switch.",
   "realUpstreamCalls": 0,
   "userProfilesOrCredentialsRead": false,
-  "ci": {"status": "not-run", "reason": "This redesign is a local uncommitted branch; previous revisions' CI is not evidence for it."},
+  "ci": {
+    "status": "success",
+    "verifiedCommit": "f51df40e14baaa2ca40bc9b1ec62e9787b556b3a",
+    "runId": 40291204080,
+    "url": "https://github.com/yange0793-dot/resource-history-bridge/actions/runs/40291204080",
+    "matrix": "All nine Ubuntu/macOS/Windows x Node18/22/24 jobs succeeded.",
+    "linuxAndMacOS": "All six jobs passed 1421/1421, no skipped or cancelled tests.",
+    "windows": [
+      {"node": "18", "tests": 1421, "pass": 1420, "fail": 0, "skip": 1, "cancelled": 0, "powerShell51LauncherTests": 13, "powerShell51LauncherPass": 13},
+      {"node": "22", "tests": 1421, "pass": 1420, "fail": 0, "skip": 1, "cancelled": 0, "powerShell51LauncherTests": 13, "powerShell51LauncherPass": 13},
+      {"node": "24", "tests": 1421, "pass": 1420, "fail": 0, "skip": 1, "cancelled": 0, "powerShell51LauncherTests": 13, "powerShell51LauncherPass": 13}
+    ],
+    "windowsSkip": "Source/destination symlink privilege test retains its explicit Windows skip; it was not removed to obtain a green result. All other tests ran.",
+    "nativeServices": "CI executes injected native manager/file tests and real foreground launcher tests, not actual service registration or login autostart."
+  },
+  "initialCiFailure": {
+    "commit": "2b4611f64dbf790f10f27fe90e6fb5c96c9ecdff",
+    "runId": 40290046305,
+    "url": "https://github.com/yange0793-dot/resource-history-bridge/actions/runs/40290046305",
+    "linuxAndMacOS": "Six jobs passed 1418/1418.",
+    "windows": [
+      {"node": "18", "tests": 1418, "pass": 1392, "fail": 25, "skip": 1, "cancelled": 0},
+      {"node": "22", "tests": 1418, "pass": 1393, "fail": 24, "skip": 1, "cancelled": 0},
+      {"node": "24", "tests": 1418, "pass": 1393, "fail": 24, "skip": 1, "cancelled": 0}
+    ],
+    "causeAndFix": "Read-only fsync handles caused Windows INSTALL_FAILED; use non-truncating writable handles without dropping durability/ownership checks. VM log descriptors caused Node18 cleanup ENOTEMPTY; close them in the test fixture.",
+    "failedRunAndOldImplementationRegressionPreserved": true
+  },
   "delivery": {
-    "committed": false,
-    "pushed": false,
+    "committed": true,
+    "pushed": true,
+    "initialRuntimeCommit": "2b4611f64dbf790f10f27fe90e6fb5c96c9ecdff",
+    "runtimeCommit": "f51df40e14baaa2ca40bc9b1ec62e9787b556b3a",
     "mergedToMain": false,
     "deployed": false,
     "nativeServicesInstalledOrRestarted": false,
@@ -115,7 +161,7 @@
     "runningMixrouterIntegrationChanged": false
   },
   "notVerified": [
-    "This revision on real Windows/Linux CI or native PowerShell runtime",
+    "Actual native service registration and background PowerShell runtime; foreground PowerShell launchers and cross-platform CI were verified",
     "Native service install/start/stop and login autostart on real macOS/Linux/Windows user sessions",
     "Integration into the running Mixrouter or arbitrary third-party gateways",
     "Installed Codex/Claude Code full automatic-entry continuation or full Harness GUI",
