@@ -110,18 +110,27 @@
   },
   "diagnosticsFinalAffectedCheck": "Passed after allowlisting new fixed recovery/rejection enums; unchanged scope reuses full matrix evidence.",
   "ci": {
-    "status": "pending",
-    "matrix": "Ubuntu/macOS/Windows x Node18/22/24; actual Windows PowerShell startup checks",
+    "status": "success",
+    "verifiedRuntimeCommit": "cc890851938828e313d8019079418e56c4074b38",
+    "candidateRuns": [40255595370, 40255598730],
+    "mergedMainRun": 40255751839,
+    "mergedMainCommit": "14ec29df3ad38d1d5c133b6c006efdae73be7c45",
+    "matrix": "Ubuntu/macOS/Windows x Node18/22/24; all nine jobs passed; actual Windows PowerShell startup checks",
     "retainedFailedRuns": [
       40255210088,
       40255236593
     ],
-    "initialFailure": "All Windows nodes failed partial diagnostic-write rollback; macOS/Linux passed. Added same-inode nonappend descriptor fallback for rollback; final CI pending."
+    "initialFailure": "All Windows nodes failed partial diagnostic-write rollback; macOS/Linux passed. Same-inode nonappend descriptor fallback fixed rollback; final cross-platform CI passed."
   },
   "delivery": {
-    "committed": false,
-    "pushed": false,
-    "deployed": false
+    "committed": true,
+    "pushed": true,
+    "mergedMain": true,
+    "pullRequest": "https://github.com/yange0793-dot/resource-history-bridge/pull/1",
+    "localPluginDeploymentForVerification": true,
+    "deployedRuntimeCommit": "cc890851938828e313d8019079418e56c4074b38",
+    "localClientsStayOnMixrouter": true,
+    "clientConfigurationsChanged": false
   },
   "notVerified": [
     "Natural original-conversation fault after deployment",
