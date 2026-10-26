@@ -164,7 +164,7 @@ test('request deadline cancels retry delay without issuing another upstream call
   assert.equal(result.text, error);
   assert.equal(f.requests.length, 1);
   // Resource-only clients keep the legacy synthetic 504 for a stalled deadline.
-  const legacy = await fixture(t, res => send(res, 400, error), { timeoutMs: 60, retryDelayMs: 1000, transparentRecovery: false });
+  const legacy = await fixture(t, res => send(res, 400, error), { timeoutMs: 400, retryDelayMs: 1000, transparentRecovery: false });
   assert.equal((await post(legacy.address)).status, 504);
   assert.equal(legacy.requests.length, 1);
 });

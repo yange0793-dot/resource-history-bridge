@@ -317,7 +317,11 @@ test('truncated upstream stream after commit aborts downstream and does not retr
 test('total timeout closes stalled upstream without retry', async t => {
   let closed;
   const closedPromise = new Promise(resolve => { closed = resolve; });
-  const f = await fixture(t, (req, res) => { res.on('close', closed); }, { timeoutMs: 40 });
+  // The budget must outlast one loopback round trip, or the deadline can expire
+  // before the upstream ever sees the request and the request-count assertion
+  // fails on a loaded machine. The upstream never responds, so the deadline
+  // always decides the outcome regardless of the size of the budget.
+  const f = await fixture(t, (req, res) => { res.on('close', closed); }, { timeoutMs: 400 });
   const result = await request(f.address);
   assert.equal(result.status, 504);
   await closedPromise;
@@ -618,7 +622,7 @@ test('HTTP400 mislabeled JSON stalled after complete JSON hits total deadline wi
   const f = await fixture(t, (_req, res) => {
     res.writeHead(400, { 'content-type': 'text/event-stream' });
     res.write(resourceError);
-  }, { timeoutMs: 35 });
+  }, { timeoutMs: 400 });
   const result = await request(f.address);
   assert.equal(result.status, 504);
   assert.equal(f.received.length, 1);
