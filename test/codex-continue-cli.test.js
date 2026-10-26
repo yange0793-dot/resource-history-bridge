@@ -77,6 +77,18 @@ rl.on('line', line => {
 });
 `.replaceAll('THREAD_ID', THREAD);
 
+// Windows has no signal delivery from a parent process: child.kill('SIGINT')
+// terminates the child outright, so the CLI's handler never runs. A real Ctrl+C
+// in a Windows console arrives as a JS-level SIGINT event on process instead, so
+// the runner below reproduces that event while the CLI is mid-run.
+const WIN_INTERRUPT_RUNNER = String.raw`
+'use strict';
+const cli = require(process.argv[2]);
+const args = process.argv.slice(3);
+setTimeout(() => process.emit('SIGINT'), 700);
+cli.main(args).then(code => { process.exitCode = code; }, () => { process.exitCode = 1; });
+`;
+
 function writeMock(t) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'rhb-codex-cli-'));
   const file = path.join(dir, 'mock-codex.js');
@@ -85,9 +97,25 @@ function writeMock(t) {
   return file;
 }
 
-function runCli(t, { args = [], mode = 'complete', initialCode = 'serverOverloaded', timeoutMs = 20000 } = {}) {
+function writeRunner(t) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'rhb-codex-runner-'));
+  const file = path.join(dir, 'run-cli.js');
+  fs.writeFileSync(file, WIN_INTERRUPT_RUNNER);
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  return file;
+}
+
+function runCli(t, {
+  args = [],
+  mode = 'complete',
+  initialCode = 'serverOverloaded',
+  timeoutMs = 20000,
+  inProcessInterrupt = false
+} = {}) {
   const mock = writeMock(t);
-  const child = spawn(process.execPath, [CLI, '--command', process.execPath, '--arg', mock, ...args], {
+  const cliArgs = ['--command', process.execPath, '--arg', mock, ...args];
+  const argv = inProcessInterrupt ? [writeRunner(t), CLI, ...cliArgs] : [CLI, ...cliArgs];
+  const child = spawn(process.execPath, argv, {
     env: {
       ...process.env,
       PATH: process.env.PATH,
@@ -154,10 +182,19 @@ test('the CLI stops instead of continuing a failure that cannot be continued', {
 });
 
 test('the CLI exits cleanly on Ctrl+C while a turn is unacknowledged', { timeout: 30000 }, async t => {
-  const { child, finished } = runCli(t, { args: ['--thread', THREAD], mode: 'hang' });
+  // Windows cannot deliver SIGINT from a parent process, so the CLI is run under
+  // a runner that emits the same JS-level event a console Ctrl+C produces there.
+  const onWindows = process.platform === 'win32';
+  const { child, finished } = runCli(t, {
+    args: ['--thread', THREAD],
+    mode: 'hang',
+    inProcessInterrupt: onWindows
+  });
   // Give the handshake and the first state read time to happen.
-  await new Promise(resolve => setTimeout(resolve, 700));
-  child.kill('SIGINT');
+  if (!onWindows) {
+    await new Promise(resolve => setTimeout(resolve, 700));
+    child.kill('SIGINT');
+  }
   const result = await finished;
   assert.equal(result.code, 130, result.stderr);
   assert.match(result.stderr, /interrupted/);
