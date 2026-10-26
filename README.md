@@ -61,6 +61,6 @@ node --test
 
 测试使用 loopback mock，不需要真实 key。恢复用例保留官方目标 URL，测试专用传输映射将请求送到本机 mock；其他目标的透传用例检查原始字节、单次请求、状态与协议不被改变。
 
-本次目标识别与透传修改在本机 Node.js 18/22/24 各 946/946；恢复原有伪造主机组合用例后，受影响文件在三版 Node 各 29/29。安装版 Codex 的 152 项复制历史在两类故障注入下均完成精确投影，Harness 的 71 项与 91 项检查通过，见 [本次记录](docs/verification-provider-scope-20261026.json)。未运行本次版本的跨平台 CI，未提交或推送，也未改客户端配置或重启服务。
+本次目标识别与透传修改在本机 Node.js 18/22/24 各 946/946；恢复原有伪造主机组合用例后，受影响文件在三版 Node 各 29/29。安装版 Codex 的 152 项复制历史在两类故障注入下均完成精确投影，Harness 的 71 项与 91 项检查通过，见 [本次记录](docs/verification-provider-scope-20261026.json)。已提交并推送到 `main`，首次 [跨平台 CI](https://github.com/yange0793-dot/resource-history-bridge/actions/runs/40268169288) 的 macOS/Linux 六个组合通过，Windows 两项启动测试因测试预加载路径转义失败；已修正测试路径，受影响启动文件在本机三版 Node 各 12/12，待新 CI 确认。未改客户端配置或重启服务。
 
 此前版本的九个跨平台 CI 组合及 Windows PowerShell 7/5.1 启动检查见 [历史记录](docs/verification-agentrouter-focus-20261026.json)，不当作本次版本证据。自然上游故障和长期负载不在本轮验证范围。

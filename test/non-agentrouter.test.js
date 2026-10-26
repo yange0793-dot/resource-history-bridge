@@ -286,4 +286,3 @@ for (const [name, options, status] of [
   assert.equal(result.status, status);
   assert.equal(f.requests.length, 0);
 });
-

@@ -55,10 +55,19 @@
     {"probe": "full", "checks": 91, "pass": true, "listenersAndSocketsClosed": true}
   ],
   "testTransport": "Official configured URLs are mapped to loopback by a test-only helper before DNS; no production declaration or network credentials.",
-  "ci": {"status": "not run for this revision", "priorCIIsNotThisRevision": true},
+  "ci": {
+    "status": "initial run failed; test preload path corrected, awaiting rerun",
+    "verifiedCommit": "3c1f417c53c692f9e10f29ce5775c36ca3efb2aa",
+    "runId": 40268169288,
+    "url": "https://github.com/yange0793-dot/resource-history-bridge/actions/runs/40268169288",
+    "priorCIIsNotThisRevision": true,
+    "retainedFailedRuns": [40268169288],
+    "initialFailure": "Six macOS/Linux jobs passed. All three Windows jobs passed 944/946 tests; two launcher recovery tests failed because NODE_OPTIONS consumed backslashes in a test-only preload path, causing MODULE_NOT_FOUND before startup. Corrected the test path to forward slashes; no runtime changes, skipped tests or weakened assertions."
+  },
   "delivery": {
-    "committed": false,
-    "pushed": false,
+    "committed": true,
+    "pushed": true,
+    "branch": "main",
     "clientConfigurationsChanged": false,
     "existingServicesRestarted": false,
     "localPluginRedeployed": false

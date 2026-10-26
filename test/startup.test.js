@@ -307,8 +307,9 @@ test(`launcher converts Messages and recovers native Responses resource errors i
   t.after(() => closeServer(upstream));
   const port = await unusedPort();
   const script = path.join(root, 'scripts', windows ? 'start-windows.ps1' : 'start-macos.command');
+  const preload = path.join(root, 'scripts', 'mock-agentrouter.cjs').replace(/\\/g, '/');
   const child = spawn(shell, windows ? ['-NoProfile', '-NonInteractive', '-File', script] : [script], {
-    cwd, env: { ...startupEnv(), NODE_OPTIONS: `--require="${path.join(root, 'scripts', 'mock-agentrouter.cjs')}"`, RHB_TEST_MOCK_PORT: String(upstream.address().port), RHB_UPSTREAM: 'https://agentrouter.org/v1', RHB_PORT: String(port), RHB_UPSTREAM_PROTOCOL: 'responses', RHB_HISTORY_MODE: historyMode, RHB_RETRY_DELAY_MS: '0', RHB_RESOURCE_ATTEMPTS: '3' },
+    cwd, env: { ...startupEnv(), NODE_OPTIONS: `--require="${preload}"`, RHB_TEST_MOCK_PORT: String(upstream.address().port), RHB_UPSTREAM: 'https://agentrouter.org/v1', RHB_PORT: String(port), RHB_UPSTREAM_PROTOCOL: 'responses', RHB_HISTORY_MODE: historyMode, RHB_RETRY_DELAY_MS: '0', RHB_RESOURCE_ATTEMPTS: '3' },
     stdio: ['ignore', 'pipe', 'pipe']
   });
   const closed = once(child, 'close');
