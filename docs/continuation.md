@@ -49,6 +49,31 @@ const result = await continuation.run({ threadId, failedTurn });
 - 只有 `turn/completed` 是终态。带 `willRetry` 的错误通知（无论 true 或 false）都不会触发任何续跑。
 - ACK 丢失或超时不盲重发：交给 `reconcileStart`；只有宿主确认"从未启动"才会重发一次，否则停止。
 
+### Codex（内置 app-server 客户端）
+
+上面的 `createCodexTurnContinuation` 需要宿主自己实现 JSON-RPC、快照和 ACK 对账。`lib/codex-app-server.js` 把这三件事按 `codex app-server` 的真实协议做完了：
+
+```js
+const { createCodexAppServerClient, createCodexAutoContinue } = require('./');
+
+const client = createCodexAppServerClient();       // 默认命令 codex，参数 DEFAULT_ARGS
+await client.initialize();
+const runner = createCodexAutoContinue({ client }); // watch 轮询、maxContinuations、deadlineMs 均可选
+const result = await runner.run({ threadId, signal: controller.signal });
+```
+
+命令行等价入口：
+
+```sh
+rhb-codex-continue --thread <threadId>
+rhb-codex-continue --thread <threadId> --max-continuations 2 --json
+```
+
+- 协议面按 `codex-cli 0.162.1` 的 `generate-json-schema` 与真实 stdio 握手核对：行分隔 JSON-RPC 2.0，`id` 字符串或整数都会原样回显，错误是 `{id, error:{code,message}}`，通知多一个 `emittedAtMs`，`initialize` 之后要发 `initialized`。用到的方法是 `thread/resume`、`thread/turns/list`、`turn/start`；监听的通知是 `turn/started`、`turn/completed`、`error`、`serverRequest/resolved`。
+- `createCodexSnapshotReader` 只转述服务端报告的状态：线程不是 idle、失败 turn 不是最新、条目未完整加载、工具调用未结算、有待批审批、服务端给了 `willRetry`，任何一条不满足就拒绝并给出具体拒绝码，绝不推断“应该没事”。失败指纹不匹配也拒绝。
+- 退出码：0 完成、1 停止、2 用法错误、3 连不上 app server、130 中断。第二次 Ctrl+C 直接关闭子进程退出。
+- 未验证：没有在真实上游故障下观测到一次完整续跑（需要真实可恢复失败），item 状态语义来自生成的 schema 而非实测 turn。协议面本身由真实 `codex` 二进制冒烟覆盖。
+
 ### DeepSeek Harness
 
 ```js
