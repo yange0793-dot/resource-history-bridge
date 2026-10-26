@@ -1,0 +1,67 @@
+{
+  "date": "2026-10-26",
+  "scope": "AgentRouter-only upstream defaults, client presets and shared recovery execution; no local client configuration changes or service deployment.",
+  "upstream": {
+    "default": "https://agentrouter.org/v1",
+    "officialHosts": ["agentrouter.org", "ps.air-outer.com"],
+    "officialProtocol": "https",
+    "fixedLoopbackProxyAllowed": true,
+    "otherRemoteSuppliersRejected": true,
+    "scoped400OfficialHostnameGuardUnchanged": true
+  },
+  "configuration": {
+    "clientPresets": ["codex", "harness", "claude-code", "generic"],
+    "cliDefault": "generic",
+    "interactiveLauncherDefault": "codex",
+    "legacyExplicitOverridesPreserved": true,
+    "startupCredentialsPrinted": false,
+    "upstreamPathPrinted": false,
+    "keyRotation": "Synthetic fixtures verify a new client key on a new HTTP request without restarting the bridge; authentication remains fixed during each request's recovery. Explicit bridge key override wins; invalid keys are not retried."
+  },
+  "recovery": {
+    "sharedExecution": true,
+    "distinctPoliciesPreserved": true,
+    "legacyLimits": {"resourceAttemptsMax": 100, "timeoutMsMax": 1800000, "fixedDelayMsMax": 60000},
+    "harnessLimits": {"totalAttemptsMax": 10, "transientAttemptsMax": 3, "resourceAttemptsMax": 10, "deadlineMsMax": 180000},
+    "projectionOnce": true,
+    "originalHistoryUnchanged": true,
+    "codexEmptyTransientPolicyNotExpanded": true,
+    "outputUnknownPartialCommitBarriersPreserved": true,
+    "legacyMinimal409Preserved": true
+  },
+  "localMacOS": [
+    {"node": "18.20.8", "tests": 887, "pass": 887, "fail": 0, "skip": 0, "cancelled": 0},
+    {"node": "22.23.3", "tests": 887, "pass": 887, "fail": 0, "skip": 0, "cancelled": 0},
+    {"node": "24.18.0", "tests": 887, "pass": 887, "fail": 0, "skip": 0, "cancelled": 0}
+  ],
+  "installedCodexLoopback": {
+    "client": "Codex0.164.0",
+    "historyItems": 152,
+    "faults": [
+      {"kind": "azureWrapper", "exit": 0, "requests": 2, "turnCompleted": true, "exactProjection": true},
+      {"kind": "scoped400", "exit": 0, "requests": 2, "turnCompleted": true, "exactProjection": true}
+    ],
+    "originalHistoryUnchanged": true,
+    "usesMixrouter": false,
+    "realUpstream": false
+  },
+  "installedHarnessLoopback": [
+    {"probe": "parity", "checks": 71, "pass": true, "listenersAndSocketsClosed": true},
+    {"probe": "full", "checks": 91, "pass": true, "listenersAndSocketsClosed": true}
+  ],
+  "ci": {
+    "status": "pending",
+    "matrix": "Ubuntu/macOS/Windows x Node18/22/24; actual Windows PowerShell7 and5.1 launcher tests"
+  },
+  "delivery": {
+    "localClientsStayOnMixrouter": true,
+    "clientConfigurationsChanged": false,
+    "existingServicesRestarted": false,
+    "localPluginRedeployed": false
+  },
+  "notVerified": [
+    "Natural live-upstream fault recovery after this refactor",
+    "All history types or management-tool versions",
+    "Long-running sustained workloads"
+  ]
+}

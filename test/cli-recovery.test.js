@@ -21,7 +21,7 @@ function cleanEnv(extra = {}) {
 
 // A subprocess intercepts only the CLI's bridge dependency, not its env parser.
 // This makes option wiring observable without changing the public server API.
-function configuredOptions(env = {}) {
+function configuredResult(env = {}) {
   const script = `
     const Module = require('node:module');
     const cli = process.argv[1];
@@ -38,9 +38,13 @@ function configuredOptions(env = {}) {
     process.argv = [process.execPath, cli];
     require(cli);
   `;
-  const result = spawnSync(process.execPath, ['-e', script, cli], {
+  return spawnSync(process.execPath, ['-e', script, cli], {
     env: cleanEnv(env), encoding: 'utf8', timeout: 5000
   });
+}
+
+function configuredOptions(env = {}) {
+  const result = configuredResult(env);
   assert.ifError(result.error);
   assert.equal(result.status, 0, result.stderr);
   assert.equal(result.stderr, '');
@@ -120,6 +124,55 @@ async function assertListenerClosed(port) {
   }), { code: 'ECONNREFUSED' });
 }
 
+test('CLI defaults to the official AgentRouter URL without contacting it', () => {
+  const result = configuredResult({ RHB_UPSTREAM: undefined });
+  assert.ifError(result.error);
+  assert.equal(result.status, 0, result.stderr);
+  const options = configuredOptions({ RHB_UPSTREAM: undefined });
+  assert.equal(options.upstream, 'https://agentrouter.org/v1');
+  assert.equal(options.historyMode, 'minimal');
+  assert.equal(options.upstreamProtocol, 'passthrough');
+  assert.match(result.stdout, /AgentRouter upstream: https:\/\/agentrouter\.org\n/);
+  assert.match(result.stdout, /Client: generic; history: minimal; protocol: passthrough; auth source: client/);
+});
+
+test('CLI wires each client preset with final history-mode recovery defaults', () => {
+  for (const [client, historyMode, upstreamProtocol] of [
+    ['codex', 'codex', 'passthrough'], ['harness', 'harness', 'passthrough'],
+    ['claude-code', 'minimal', 'responses'], ['generic', 'minimal', 'passthrough']
+  ]) {
+    const options = configuredOptions({ RHB_CLIENT: client });
+    assert.equal(options.historyMode, historyMode);
+    assert.equal(options.upstreamProtocol, upstreamProtocol);
+    assert.equal(options.retryDelayMs, historyMode === 'harness' ? 250 : 1000);
+    assert.equal(options.generic400Projection, historyMode === 'harness');
+  }
+  const minimal = configuredOptions({ RHB_CLIENT: 'harness', RHB_HISTORY_MODE: 'minimal', RHB_UPSTREAM_PROTOCOL: 'responses' });
+  assert.equal(minimal.historyMode, 'minimal');
+  assert.equal(minimal.upstreamProtocol, 'responses');
+  assert.equal(minimal.retryDelayMs, 1000);
+  assert.equal(minimal.generic400Projection, false);
+  const harness = configuredOptions({ RHB_CLIENT: 'codex', RHB_HISTORY_MODE: 'harness' });
+  assert.equal(harness.retryDelayMs, 250);
+  assert.equal(harness.generic400Projection, true);
+});
+
+test('CLI rejects unsupported remote upstreams and invalid clients before creating the bridge', () => {
+  for (const env of [
+    { RHB_UPSTREAM: 'https://api.example.com/v1' },
+    { RHB_UPSTREAM: 'http://agentrouter.org/v1' },
+    { RHB_UPSTREAM: 'https://agentrouter.org.evil.test/v1' },
+    { RHB_UPSTREAM: '' }, { RHB_CLIENT: '' }, { RHB_CLIENT: 'unknown' }
+  ]) {
+    const result = configuredResult(env);
+    assert.ifError(result.error);
+    assert.equal(result.status, 1);
+    assert.equal(result.stdout, '');
+    assert.ok(result.stderr.startsWith(STARTUP_ERROR));
+    assert.doesNotMatch(result.stderr, /api\.example\.com|evil\.test|unknown/);
+  }
+});
+
 test('CLI Harness defaults wire the bounded recovery policy and disable diagnostics', () => {
   const options = configuredOptions({ RHB_HISTORY_MODE: 'harness' });
   assert.equal(options.totalAttempts, 10);
@@ -189,7 +242,9 @@ test('CLI rejects invalid env options with a sanitized startup error', { timeout
     { RHB_DIAGNOSTICS_PATH: path.join(os.tmpdir(), 'mock.jsonl'), RHB_DIAGNOSTICS_MAX_BYTES: '0' },
     { RHB_DIAGNOSTICS_PATH: path.join(os.tmpdir(), 'mock.jsonl'), RHB_DIAGNOSTICS_MAX_FILES: '0' },
     { RHB_HOST: '0.0.0.0' }, { RHB_PORT: '0' },
-    { RHB_HISTORY_MODE: 'unknown' }, { RHB_UPSTREAM_PROTOCOL: 'unknown' },
+    { RHB_CLIENT: 'unknown' }, { RHB_CLIENT: '' },
+    { RHB_HISTORY_MODE: 'unknown' }, { RHB_HISTORY_MODE: '' },
+    { RHB_UPSTREAM_PROTOCOL: 'unknown' }, { RHB_UPSTREAM_PROTOCOL: '' },
     { RHB_REASONING_SHAPE: 'unknown' }, { RHB_USER_AGENT: 'MOCK_SECRET\r\nheader' }
   ];
   for (const env of invalid) {
@@ -230,6 +285,21 @@ test('index exposes recovery and diagnostics helpers without replacing existing 
   assert.equal(typeof api.projectResponsesHistory, 'function');
   assert.equal(typeof api.decideRecovery, 'function');
   assert.equal(typeof api.createDiagnostics, 'function');
+});
+
+test('CLI startup logs omit valid upstream paths and bridge credentials', { timeout: 15000 }, async t => {
+  const port = await unusedPort();
+  const { child, closed, state } = await startCli(t, {
+    RHB_UPSTREAM: 'http://127.0.0.1:1/MOCK_PATH_SECRET/v1', RHB_PORT: String(port),
+    RHB_CLIENT: 'claude-code', RHB_API_KEY: 'MOCK_ENV_SECRET', RHB_USER_AGENT: 'MOCK_HEADER_SECRET'
+  });
+  assert.equal(state.errors, '');
+  assert.match(state.output, /AgentRouter upstream: http:\/\/127\.0\.0\.1:1\n/);
+  assert.match(state.output, /Client: claude-code; history: minimal; protocol: responses; auth source: bridge override/);
+  assert.doesNotMatch(state.output, /MOCK_PATH_SECRET|MOCK_ENV_SECRET|MOCK_HEADER_SECRET/);
+  child.kill('SIGTERM');
+  await closed;
+  await assertListenerClosed(port);
 });
 
 test('CLI starts from another cwd, relays locally, and SIGTERM closes its listener', { timeout: 15000 }, async t => {

@@ -70,6 +70,27 @@ function waitForStartup(child, state) {
   });
 }
 
+async function startLauncher(t, env, input) {
+  const shell = windows ? powershell() : 'bash';
+  assert.ok(shell, 'Windows verification requires PowerShell');
+  const script = path.join(root, 'scripts', windows ? 'start-windows.ps1' : 'start-macos.command');
+  const args = windows ? ['-NoProfile', ...(input === undefined ? ['-NonInteractive'] : []), '-File', script] : [script];
+  const child = spawn(shell, args, {
+    cwd: os.tmpdir(), env: { ...startupEnv(), ...env }, stdio: [input === undefined ? 'ignore' : 'pipe', 'pipe', 'pipe']
+  });
+  const closed = once(child, 'close');
+  closed.catch(() => {});
+  t.after(async () => { await killTree(child, 'SIGKILL'); await closed; });
+  const state = { output: '', errors: '' };
+  child.stdout.setEncoding('utf8');
+  child.stderr.setEncoding('utf8');
+  child.stdout.on('data', chunk => { state.output += chunk; });
+  child.stderr.on('data', chunk => { state.errors += chunk; });
+  if (input !== undefined) child.stdin.end(input);
+  await waitForStartup(child, state);
+  return { child, closed, state };
+}
+
 function post(port, body, requestPath = '/v1/messages') {
   return new Promise((resolve, reject) => {
     const req = http.request({
@@ -137,7 +158,7 @@ test('launcher runs from another cwd, preserves configured env and forwards loca
     cwd,
     env: {
       ...startupEnv(), RHB_UPSTREAM: `http://127.0.0.1:${upstream.address().port}/mock-base`,
-      RHB_PORT: String(port), RHB_HOST: '127.0.0.1', RHB_UPSTREAM_PROTOCOL: 'passthrough',
+      RHB_PORT: String(port), RHB_HOST: '127.0.0.1', RHB_CLIENT: 'generic', RHB_UPSTREAM_PROTOCOL: 'passthrough',
       RHB_API_KEY: 'MOCK_STARTUP_KEY'
     },
     stdio: ['ignore', 'pipe', 'pipe']
@@ -159,6 +180,8 @@ test('launcher runs from another cwd, preserves configured env and forwards loca
   assert.equal(result.body, emptyMessage);
   assert.deepEqual(requests, [{ method: 'POST', url: '/mock-base/messages', authorization: 'Bearer MOCK_STARTUP_KEY', body }]);
   assert.equal(state.errors, '');
+  assert.match(state.output, /Client: generic; history: minimal; protocol: passthrough; auth source: bridge override/);
+  assert.doesNotMatch(state.output, /\[codex\]/);
   assert.equal(state.output.includes('MOCK_STARTUP_KEY'), false);
   assert.equal(state.output.includes('MOCK_CLIENT_KEY'), false);
 
@@ -168,6 +191,78 @@ test('launcher runs from another cwd, preserves configured env and forwards loca
     assert.equal(code, 0);
     assert.equal(signal, null);
   }
+  await listenerClosed(port);
+});
+
+for (const [choice, historyMode, upstreamProtocol] of [
+  ['', 'codex', 'passthrough'], ['codex', 'codex', 'passthrough'],
+  ['harness', 'harness', 'passthrough'], ['claude-code', 'minimal', 'responses'],
+  ['generic', 'minimal', 'passthrough']
+]) {
+  test(`launcher asks only for client and selects ${choice || 'default codex'}`, { timeout: 45000 }, async t => {
+    const port = await unusedPort();
+    const client = choice || 'codex';
+    const { child, closed, state } = await startLauncher(t, {
+      RHB_UPSTREAM: 'http://127.0.0.1:1/v1', RHB_PORT: String(port)
+    }, `${choice}\n`);
+    assert.match(state.output, /codex \/ harness \/ claude-code \/ generic \[codex\]/);
+    assert.match(state.output, new RegExp(`Client: ${client}; history: ${historyMode}; protocol: ${upstreamProtocol}; auth source: client`));
+    assert.doesNotMatch(state.output, /Upstream API Base URL|上游 API Base URL|Choose responses|选择 responses/);
+    assert.equal(state.errors, '');
+    await killTree(child, 'SIGTERM');
+    await closed;
+    await listenerClosed(port);
+  });
+}
+
+test('launcher preserves preset overrides and advanced env without prompting', { timeout: 45000 }, async t => {
+  const port = await unusedPort();
+  const { child, closed, state } = await startLauncher(t, {
+    RHB_UPSTREAM: 'http://127.0.0.1:1/preserved-base', RHB_PORT: String(port),
+    RHB_CLIENT: 'harness', RHB_HISTORY_MODE: 'minimal', RHB_UPSTREAM_PROTOCOL: 'responses',
+    RHB_RETRY_DELAY_MS: '5000', RHB_GENERIC_400_PROJECTION: 'false'
+  });
+  assert.match(state.output, /AgentRouter upstream: http:\/\/127\.0\.0\.1:1\n/);
+  assert.doesNotMatch(state.output, /preserved-base/);
+  assert.match(state.output, /Client: harness; history: minimal; protocol: responses; auth source: client/);
+  assert.doesNotMatch(state.output, /\[codex\]/);
+  assert.equal(state.errors, '');
+  await killTree(child, 'SIGTERM');
+  await closed;
+  await listenerClosed(port);
+});
+
+test('launcher rejects invalid selection and remote upstream without logging secrets', { timeout: 15000 }, () => {
+  const shell = windows ? powershell() : 'bash';
+  assert.ok(shell, 'Windows verification requires PowerShell');
+  const script = path.join(root, 'scripts', windows ? 'start-windows.ps1' : 'start-macos.command');
+  for (const [extra, input] of [
+    [{ RHB_CLIENT: 'unknown', RHB_UPSTREAM: 'http://127.0.0.1:1/v1' }, undefined],
+    [{ RHB_CLIENT: 'generic', RHB_UPSTREAM: 'https://MOCK_USER:MOCK_URL_SECRET@agentrouter.org/v1' }, undefined],
+    [{ RHB_CLIENT: 'generic', RHB_UPSTREAM: 'https://api.example.com/v1' }, undefined],
+    [{ RHB_UPSTREAM: 'http://127.0.0.1:1/v1' }, 'unknown\n']
+  ]) {
+    const args = windows ? ['-NoProfile', ...(input === undefined ? ['-NonInteractive'] : []), '-File', script] : [script];
+    const result = spawnSync(shell, args, {
+      env: { ...startupEnv(), RHB_API_KEY: 'MOCK_ENV_SECRET', ...extra }, input,
+      encoding: 'utf8', timeout: 5000
+    });
+    assert.ifError(result.error);
+    assert.equal(result.status, 1);
+    assert.doesNotMatch(result.stdout + result.stderr, /listening at|MOCK_USER|MOCK_URL_SECRET|MOCK_ENV_SECRET|api\.example\.com/);
+    if (input === undefined) assert.doesNotMatch(result.stdout, /\[codex\]/);
+  }
+});
+
+test('launcher without upstream env uses AgentRouter default without contacting it', { timeout: 45000 }, async t => {
+  const port = await unusedPort();
+  const { child, closed, state } = await startLauncher(t, { RHB_CLIENT: 'claude-code', RHB_PORT: String(port) });
+  assert.match(state.output, /AgentRouter upstream: https:\/\/agentrouter\.org\n/);
+  assert.match(state.output, /Client: claude-code; history: minimal; protocol: responses; auth source: client/);
+  assert.doesNotMatch(state.output, /\[codex\]/);
+  assert.equal(state.errors, '');
+  await killTree(child, 'SIGTERM');
+  await closed;
   await listenerClosed(port);
 });
 
@@ -233,6 +328,8 @@ test(`launcher converts Messages and recovers native Responses resource errors i
   assert.equal(requests.length, 3);
   assert.equal(requests.every(entry => entry.auth === 'Bearer MOCK_CLIENT_KEY'), true);
   assert.equal(state.errors, '');
+  assert.match(state.output, new RegExp(`Client: generic; history: ${historyMode}; protocol: responses; auth source: client`));
+  assert.doesNotMatch(state.output, /\[codex\]/);
   await killTree(child, 'SIGTERM');
   await closed;
   await listenerClosed(port);

@@ -2,6 +2,8 @@
 'use strict';
 
 const { createBridge } = require('./index');
+const { validateAgentRouterUpstream } = require('./lib/agentrouter');
+const { resolveClientConfig } = require('./lib/client-config');
 
 function numberFromEnv(name, fallback) {
   const value = process.env[name];
@@ -34,21 +36,22 @@ function diagnosticsFromEnv() {
 
 async function main() {
   if (process.argv.length !== 2) throw new Error('No command-line arguments are accepted. Configure with environment variables.');
-  if (!process.env.RHB_UPSTREAM) throw new Error('Set RHB_UPSTREAM to a fixed upstream API base URL, for example https://api.example.com/v1.');
+  const upstream = validateAgentRouterUpstream(process.env.RHB_UPSTREAM);
+  const { client, historyMode, upstreamProtocol } = resolveClientConfig(process.env);
   const port = numberFromEnv('RHB_PORT', 8790);
   if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error('RHB_PORT must be between 1 and 65535.');
-  const harness = process.env.RHB_HISTORY_MODE === 'harness';
+  const harness = historyMode === 'harness';
   const historyStrategy = process.env.RHB_HISTORY_STRATEGY ?? 'on-error';
   if (!['on-error', 'portable'].includes(historyStrategy)) throw new TypeError('Invalid history strategy.');
   const bridge = createBridge({
-    upstream: process.env.RHB_UPSTREAM,
+    upstream: upstream.href,
     apiKey: process.env.RHB_API_KEY,
     keyHeader: process.env.RHB_KEY_HEADER,
     userAgent: process.env.RHB_USER_AGENT,
     host: process.env.RHB_HOST,
-    upstreamProtocol: process.env.RHB_UPSTREAM_PROTOCOL,
+    upstreamProtocol,
     reasoningShape: process.env.RHB_REASONING_SHAPE,
-    historyMode: process.env.RHB_HISTORY_MODE,
+    historyMode,
     historyStrategy,
     generic400Projection: booleanFromEnv('RHB_GENERIC_400_PROJECTION', harness),
     timeoutMs: numberFromEnv('RHB_TIMEOUT_MS', 180000),
@@ -64,7 +67,8 @@ async function main() {
   });
   const address = await bridge.listen(port);
   const host = address.family === 'IPv6' ? `[${address.address}]` : address.address;
-  process.stdout.write(`resource-history-bridge listening at http://${host}:${address.port}/v1\n`);
+  const authSource = process.env.RHB_API_KEY === undefined ? 'client' : 'bridge override';
+  process.stdout.write(`AgentRouter upstream: ${upstream.origin}\nClient: ${client}; history: ${historyMode}; protocol: ${upstreamProtocol}; auth source: ${authSource}\nresource-history-bridge listening at http://${host}:${address.port}/v1\n`);
   let closing = false;
   const stop = async () => {
     if (closing) return;
@@ -77,6 +81,6 @@ async function main() {
 
 main().catch(() => {
   // Do not echo exception strings: an invalid URL could contain credentials.
-  process.stderr.write('resource-history-bridge could not start. Check RHB_UPSTREAM, loopback host, port, limits and key header; no arguments are accepted.\n');
+  process.stderr.write('resource-history-bridge could not start. Check RHB_CLIENT, the AgentRouter RHB_UPSTREAM, history/protocol overrides, loopback host, port, limits and key header; no arguments are accepted.\n');
   process.exitCode = 1;
 });

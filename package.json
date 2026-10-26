@@ -1,7 +1,7 @@
 {
   "name": "resource-history-bridge",
   "version": "0.1.0",
-  "description": "Local Responses bridge for bounded recovery from resource-bound history item errors",
+  "description": "Local AgentRouter bridge for bounded Responses history recovery",
   "main": "index.js",
   "bin": { "resource-history-bridge": "cli.js" },
   "type": "commonjs",
