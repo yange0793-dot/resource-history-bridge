@@ -56,10 +56,13 @@
   ],
   "testTransport": "Official configured URLs are mapped to loopback by a test-only helper before DNS; no production declaration or network credentials.",
   "ci": {
-    "status": "initial run failed; test preload path corrected, awaiting rerun",
-    "verifiedCommit": "3c1f417c53c692f9e10f29ce5775c36ca3efb2aa",
-    "runId": 40268169288,
-    "url": "https://github.com/yange0793-dot/resource-history-bridge/actions/runs/40268169288",
+    "status": "success",
+    "verifiedCommit": "bdee31e009ae1b1ff82bb899c82dd8a115e1d9f8",
+    "runId": 40268472510,
+    "attempt": 2,
+    "url": "https://github.com/yange0793-dot/resource-history-bridge/actions/runs/40268472510",
+    "matrix": "Ubuntu/macOS/Windows x Node18/22/24; all nine jobs passed, including actual Windows PowerShell7 and5.1 launcher tests",
+    "unchangedRerun": "Attempt1 passed all Windows/Linux jobs and macOS18/22; macOS24 had one compatibility test hit its existing1s deadline. Reran the failed job unchanged and it passed. No runtime changes, timeout increases, skipped tests or weakened assertions.",
     "priorCIIsNotThisRevision": true,
     "retainedFailedRuns": [40268169288],
     "initialFailure": "Six macOS/Linux jobs passed. All three Windows jobs passed 944/946 tests; two launcher recovery tests failed because NODE_OPTIONS consumed backslashes in a test-only preload path, causing MODULE_NOT_FOUND before startup. Corrected the test path to forward slashes; no runtime changes, skipped tests or weakened assertions."
@@ -73,7 +76,6 @@
     "localPluginRedeployed": false
   },
   "notVerified": [
-    "Windows/macOS/Linux CI for this revision",
     "Natural live-upstream fault recovery after this change",
     "All history types, management-tool versions or long-running sustained workloads"
   ]

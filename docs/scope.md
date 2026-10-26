@@ -201,7 +201,7 @@ async function main() {
 
 | 记录 | 能证明什么 | 不能证明什么 |
 | --- | --- | --- |
-| [2026-10-26 目标识别与透传](verification-provider-scope-20261026.json) | 本机 Node.js 18/22/24 各 946/946；后续恢复原始伪造主机组合后受影响文件各 29/29。其他目标单次调用、原字节/协议/编码、上游错误透传；安装版 Codex 152 项两类注入均精确投影完成，Harness 71/91 项通过并清理临时资源。 | 已推送 `main`，首次 CI 的六个 macOS/Linux 组合通过，Windows 测试路径问题已修正待重跑，未部署；不证明自然上游故障恢复率、所有历史或长期负载。 |
+| [2026-10-26 目标识别与透传](verification-provider-scope-20261026.json) | 本机 Node.js 18/22/24 各 946/946；后续恢复原始伪造主机组合后受影响文件各 29/29。其他目标单次调用、原字节/协议/编码、上游错误透传；安装版 Codex 152 项两类注入均精确投影完成，Harness 71/91 项通过并清理临时资源。 | 已推送 `main`，本次 Windows/macOS/Linux × Node18/22/24 九个 CI 组合全部通过，含 PowerShell7/5.1；首次测试路径失败及后续原样重跑的超时样本已保留，未部署；不证明自然上游故障恢复率、所有历史或长期负载。 |
 | [2026-10-26 AgentRouter 聚焦](verification-agentrouter-focus-20261026.json) | 本机 Node.js 18/22/24 各 887/887；安装版 Codex 152 项复制历史的 Azure 包装与严格400注入均精确投影后完成；安装版 Harness 71 项与 91 项检查通过，临时 listener/socket 全关闭。候选两轮及合入 main 的 Windows/macOS/Linux × Node18/22/24 九个 CI 组合全部通过，Windows PowerShell7/5.1 实际启动检查通过。 | 不证明自然上游故障恢复率、所有历史类型、管理工具版本或长期负载；未修改本地客户端或重启现有服务。 |
 | [2026-10-26 Codex 同步](verification-codex-parity-20261026.json) | 此前 runtime cc89085：macOS Node.js 18/22/24 各 827/827；Ubuntu/macOS/Windows × 三版 Node 九个 CI job 成功，实际 PowerShell 启动检查。安装版 Codex 0.164.0 对 loopback 故障 mock 完成 152 项历史投影与工具续接；Harness parity 71 项、完整 91 项检查通过。 | 不验证本轮聚焦重构；Codex 故障与恢复响应均为 mock，不是自然 AgentRouter 跨资源故障；不覆盖所有历史或持续负载。 |
 | [2026-10-25 资源恢复](verification-resource-only-20261025.json) | 历史版本的真实 macOS Claude Code 工具续接、Codex 本机注入后真实 AgentRouter 恢复响应，以及小型 encrypted reasoning 两工具 API 对照；旧跨平台启动/恢复结果。 | 注入错误不来自真实上游；小型 API 对照不等于 Codex 长混合 CLI 历史通过，失败与限流样本仍保留。 |
