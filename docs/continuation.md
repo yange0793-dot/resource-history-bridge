@@ -92,6 +92,8 @@ const result = await continuation.run({ sessionId, failedTurn });
 - 当前安装版公开客户端契约**没有** turn 级别的重试或续跑调用，也没有持久 turn 身份，因此必须由宿主提供 `awaitTurn` 观测终态。缺少该接口时适配器抛 `HARNESS_SEAM_MISSING` 并说明原因，不会编造一层。
 - `describe().missingPublicSeam` 会如实列出缺失的原生能力。
 
+已安装的 Harness（0.2.1-rc.1）上这些接口怎么接、插件怎么装、哪些缺口补不了，见 [Harness 自动续跑插件](harness-plugin.md)。`lib/harness-host.js` 把 `createHarnessHost` 需要的 `readSnapshot` / `awaitTurn` / `prompt` 都从耐久 session 日志里折叠出来，不需要宿主另写。
+
 ## 能力边界
 
 - 没有桌面运行器、没有 UI 自动化、没有键盘注入、没有按应用写死接线。
