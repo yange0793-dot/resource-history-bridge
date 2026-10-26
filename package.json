@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "description": "Embeddable AgentRouter recovery core with automatic local bridge",
   "main": "index.js",
-  "bin": { "resource-history-bridge": "cli.js", "resource-history-bridge-service": "service-cli.js" },
+  "bin": { "resource-history-bridge": "cli.js", "resource-history-bridge-service": "service-cli.js", "rhb-codex-continue": "bin/rhb-codex-continue.js" },
   "type": "commonjs",
   "engines": { "node": ">=18" },
   "scripts": { "test": "node --test" },
