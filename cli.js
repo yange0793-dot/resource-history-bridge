@@ -4,7 +4,32 @@
 const { createBridge } = require('./index');
 
 function numberFromEnv(name, fallback) {
-  return process.env[name] === undefined ? fallback : Number(process.env[name]);
+  const value = process.env[name];
+  if (value === undefined) return fallback;
+  if (!/^[+-]?\d+(?:\.\d+)?$/.test(value.trim())) throw new TypeError(`Invalid ${name}.`);
+  return Number(value);
+}
+
+function booleanFromEnv(name, fallback) {
+  const value = process.env[name];
+  if (value === undefined) return fallback;
+  switch (value.trim().toLowerCase()) {
+    case 'true': case '1': return true;
+    case 'false': case '0': return false;
+    default: throw new TypeError(`Invalid ${name}.`);
+  }
+}
+
+function diagnosticsFromEnv() {
+  const filePath = process.env.RHB_DIAGNOSTICS_PATH;
+  if (filePath === undefined) return { enabled: false };
+  if (!filePath.trim()) throw new TypeError('Invalid diagnostics path.');
+  return {
+    enabled: true,
+    filePath,
+    maxFileBytes: numberFromEnv('RHB_DIAGNOSTICS_MAX_BYTES', 1024 * 1024),
+    maxFiles: numberFromEnv('RHB_DIAGNOSTICS_MAX_FILES', 3)
+  };
 }
 
 async function main() {
@@ -12,6 +37,9 @@ async function main() {
   if (!process.env.RHB_UPSTREAM) throw new Error('Set RHB_UPSTREAM to a fixed upstream API base URL, for example https://api.example.com/v1.');
   const port = numberFromEnv('RHB_PORT', 8790);
   if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error('RHB_PORT must be between 1 and 65535.');
+  const harness = process.env.RHB_HISTORY_MODE === 'harness';
+  const historyStrategy = process.env.RHB_HISTORY_STRATEGY ?? 'on-error';
+  if (!['on-error', 'portable'].includes(historyStrategy)) throw new TypeError('Invalid history strategy.');
   const bridge = createBridge({
     upstream: process.env.RHB_UPSTREAM,
     apiKey: process.env.RHB_API_KEY,
@@ -21,11 +49,18 @@ async function main() {
     upstreamProtocol: process.env.RHB_UPSTREAM_PROTOCOL,
     reasoningShape: process.env.RHB_REASONING_SHAPE,
     historyMode: process.env.RHB_HISTORY_MODE,
+    historyStrategy,
+    generic400Projection: booleanFromEnv('RHB_GENERIC_400_PROJECTION', harness),
     timeoutMs: numberFromEnv('RHB_TIMEOUT_MS', 180000),
+    totalAttempts: numberFromEnv('RHB_TOTAL_ATTEMPTS', 10),
+    transientAttempts: numberFromEnv('RHB_TRANSIENT_ATTEMPTS', 3),
     resourceAttempts: numberFromEnv('RHB_RESOURCE_ATTEMPTS', 10),
-    retryDelayMs: numberFromEnv('RHB_RETRY_DELAY_MS', 1000),
+    retryDelayMs: numberFromEnv('RHB_RETRY_DELAY_MS', harness ? 250 : 1000),
+    maxRetryDelayMs: numberFromEnv('RHB_MAX_RETRY_DELAY_MS', 2000),
+    retryJitterRatio: numberFromEnv('RHB_RETRY_JITTER_RATIO', 0.2),
     requestLimit: numberFromEnv('RHB_REQUEST_LIMIT', 8 * 1024 * 1024),
-    bufferLimit: numberFromEnv('RHB_BUFFER_LIMIT', 64 * 1024)
+    bufferLimit: numberFromEnv('RHB_BUFFER_LIMIT', 64 * 1024),
+    diagnostics: diagnosticsFromEnv()
   });
   const address = await bridge.listen(port);
   const host = address.family === 'IPv6' ? `[${address.address}]` : address.address;

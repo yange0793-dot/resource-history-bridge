@@ -14,7 +14,7 @@ bash "/完整路径/resource-history-bridge/scripts/start-macos.command"
 
 脚本根据自身位置查找 `cli.js`，不要求当前目录是仓库。已有环境变量优先；没有 `RHB_UPSTREAM` 时询问真实上游 API Base URL；没有 `RHB_UPSTREAM_PROTOCOL` 时询问 `responses` / `passthrough`，留空默认 `responses`。`responses` 把客户端的 Messages 请求转换为上游 Responses 请求；`passthrough` 不转换。Codex 原生 Responses 请求不需要 Messages 转换。
 
-当前 Harness 修订在本机 macOS 的 Node.js 18.20.8、22.23.3、24.18.0 全量各 410/410、0 fail/skip；见 [Harness 验证](verification-harness-20261025.json)。此前资源恢复修订的 Ubuntu/macOS/Windows CI 九个组合各 382/382，见 [资源恢复验证](verification-resource-only-20261025.json)，不代替当前 Harness 修订的平台验证。启动验证包含不同工作目录、loopback HTTP 转发/转换/恢复、停止和 listener 关闭；旧版 366/366 只保留为历史。
+此前Azure-only Harness修订在本机macOS Node.js18.20.8、22.23.3、24.18.0各410/410、0 fail/skip，见 [旧Harness验证](verification-harness-20261025.json)；新增连续运行修订的同版结果见 [当前验证](verification-harness-recovery-20261025.json)。此前资源恢复修订的 Ubuntu/macOS/Windows CI 九个组合各 382/382，见 [资源恢复验证](verification-resource-only-20261025.json)，不代替当前 Harness 修订的平台验证。启动验证包含不同工作目录、loopback HTTP 转发/转换/恢复、停止和 listener 关闭；旧版 366/366 只保留为历史。
 
 ### Windows PowerShell
 
@@ -30,7 +30,7 @@ bash "/完整路径/resource-history-bridge/scripts/start-macos.command"
 
 ### 环境与密钥
 
-桥不检测或重试空响应，不会因为空输出额外返回错误。上游地址应为固定 API Base URL，例如 `https://api.example.com/v1`，不是完整 `/responses` 路径；不得在 URL 中填写密钥、用户名、密码、query 或 fragment。占位地址不能直接用。
+默认 `minimal` / `codex` / Messages 路径不检测或重试空响应。Harness 原生 Responses 使用自己的有界连续运行策略，失败预算用尽仍返回实际最后响应，不因为空输出新增错误。上游地址应为固定 API Base URL，例如 `https://api.example.com/v1`，不是完整 `/responses` 路径；不得在 URL 中填写密钥、用户名、密码、query 或 fragment。占位地址不能直接用。
 
 默认保留客户端现有密钥，脚本不询问、不保存密钥。纯透传路径保留认证 header；Messages → Responses 转换路径把 `x-api-key` 映射为 Bearer，已有 Authorization 不覆盖。无需设置 `RHB_API_KEY`。只有确实需要桥统一提供认证时，才由用户通过安全的环境管理设置 `RHB_API_KEY`；此值会覆盖客户端传来的认证 header。不得把真实密钥写入脚本、本文示例或配置文件。
 
@@ -74,7 +74,7 @@ $env:RHB_HISTORY_MODE = 'codex'
 & "C:\完整路径\resource-history-bridge\scripts\start-windows.ps1"
 ```
 
-库接入对应 `createBridge({ upstream: process.env.RHB_UPSTREAM, historyMode: 'codex' })`。默认 `minimal` 仍拒绝 `message.id` 的恢复；`codex` 只允许删除已校验的 `message`、`reasoning`、`function_call` 的 `id`，保留 `additional_tools`、custom 调用/结果的 `id`。该模式仅在已知跨资源错误、未提交输出时触发，不预先改写请求；完整内容、schema、phase/status 与工具配对要求见 [投影契约](scope.md#codex-历史投影契约)，不承诺所有 Codex 历史类型。
+库接入对应 `createBridge({ upstream: process.env.RHB_UPSTREAM, historyMode: 'codex' })`。默认 `minimal` 仍拒绝 `message.id` 的恢复；`codex` 只允许删除已校验的 `message`、`reasoning`、`function_call`、`function_call_output` 的 `id`，保留 `additional_tools`、custom 调用/结果的 `id`。带 ID 的标准工具结果必须为完整内联字符串或文本/图像数组，并与调用唯一配对；`reasoning.content: null` 保留。该模式在已知跨资源错误，或固定 AgentRouter 官方主机上的严格 `Upstream rejected the request as invalid [trace_id=…]` HTTP 400 包装、未提交输出时触发，不预先改写请求；完整内容、schema、phase/status 与工具配对要求见 [投影契约](scope.md#codex-历史投影契约)，不承诺所有 Codex 历史类型。
 
 不要重复创建同名 TOML 表。若已有 provider，可只修改该 provider 的 `base_url`，保留其余必要配置。密钥由用户现有环境管理提供 `OPENAI_API_KEY`，不填入 `config.toml`；已有 `model` 设置继续使用原模型，不改成桥的名称。修改后从包含该环境变量的终端启动新的 Codex 会话。
 
@@ -107,7 +107,7 @@ node cli.js
 
 Windows 使用相同环境变量与 `scripts/start-windows.ps1`。上游填写当前渠道真实 Base URL，`api.example.com` 仅为占位符。
 
-适配不需要修补 Harness 安装文件或重现偶发 Azure 错误。验证脚本 `node scripts/verify-harness.mjs` 使用安装版 PiAiAdapter 的公开原生 API 对本机 loopback mock 上游；PiAiAdapter 0.2.1-rc.1 / pi-ai 1.1.0 在 Node.js 24.18.0 完成 90 项检查、14 次请求、0 失败，两次只读算术工具实际执行，最终返回 `RESULT_42`。检查原生 replayState/签名、encrypted reasoning 与 backfill、call_id、strict:false 和 headers 保留，首请求字节不变，以及资源错误后同一投影的重复重发。详见 [Harness 验证](verification-harness-20261025.json)。这不是完整 Harness GUI 或真实 AgentRouter 实跑。需 Node.js 满足安装版 PiAiAdapter 要求（当前为 ≥22.19）；可用 `RHB_HARNESS_MODULES` 指定其 `dsh/node_modules` 路径。脚本不读取用户 profile 或密钥，也不调用真实渠道；普通桥本身仍只要求 Node.js ≥18。
+适配不需要修补Harness安装文件或重现偶发Azure错误。验证脚本 `node scripts/verify-harness.mjs` 使用安装版PiAiAdapter公开API对loopback mock；此前Azure-only修订的PiAiAdapter0.2.1-rc.1 / pi-ai1.1.0在Node.js24.18.0完成90项检查、14次请求、0失败，数字仅为旧版证据。当前脚本已更新为Harness连续恢复边界，同版结果见 [连续运行验证](verification-harness-recovery-20261025.json)；旧验证中两次只读算术工具实际执行，最终返回 `RESULT_42`。检查原生 replayState/签名、encrypted reasoning 与 backfill、call_id、strict:false 和 headers 保留，首请求字节不变，以及资源错误后同一投影的重复重发。详见 [Harness 验证](verification-harness-20261025.json)。这不是完整 Harness GUI 或真实 AgentRouter 实跑。需 Node.js 满足安装版 PiAiAdapter 要求（当前为 ≥22.19）；可用 `RHB_HARNESS_MODULES` 指定其 `dsh/node_modules` 路径。脚本不读取用户 profile 或密钥，也不调用真实渠道；普通桥本身仍只要求 Node.js ≥18。
 
 Harness 当前 provider 的 **Base URL** 填 `http://127.0.0.1:8790/v1`，协议选 **`openai-responses`**；保留原 provider ID、模型 ID 和已有密钥来源，避免换 provider 导致客户端将历史当成跨渠道重放。桥不替换模型，不扫描或托管 Harness 配置。
 
@@ -126,9 +126,11 @@ Harness 当前 provider 的 **Base URL** 填 `http://127.0.0.1:8790/v1`，协议
 
 `supportsStrictMode: true` 表示 PiAiAdapter 可以发显式 `strict: false`，并非开启严格工具模式；不填时某些 Responses 上游会默认严格化工具 schema，使本应可选的子代理参数变为必填。合并到现有 provider，不删除已有 models、headers、apiKeyEnv 或其他 compat 字段；不要整体替换 `config`，也不要写 `config: !!js`。
 
-`harness` 模式接受安装版 PiAiAdapter 的普通助手文本 ID、encrypted reasoning、function call/result，以及没有 item ID 的 custom 调用/结果和 inline additional_tools。恢复只移除已校验的 message/reasoning/function_call 顶层 ID；保留加密材料、call_id、工具参数、结果和已有 custom/additional ID。第一次请求原字节转发，不修改 Harness 持久会话或 replayState。具体规则见 [Harness 契约](scope.md#harness-历史投影契约)。
+`harness` 模式接受安装版 PiAiAdapter 的普通助手文本 ID、encrypted reasoning、function call/result，以及没有 item ID 的 custom 调用/结果和 inline additional_tools。恢复只移除已校验的 message/reasoning/function_call/function_call_output 顶层 ID（带 ID 的标准结果须完整内联并唯一配对）；保留加密材料、call_id、工具参数、结果和已有 custom/additional ID。默认第一次请求原字节转发；显式portable可提前投影，始终不修改Harness持久会话或replayState。具体规则见 [Harness 契约](scope.md#harness-历史投影契约)。
 
-安装版 Harness 自己会把合法空 completed 映射为 `EMPTY_RESPONSE`；桥仍原样转发这类完成，不新增空响应检测或修改 Harness 的原生策略。
+Harness 原生 `/responses` 默认启用连续运行策略：408/429/5xx、明确服务/过载错误（含无 event/type 的纯 `{error}` SSE 帧）、输出前断流或完整空/仅元数据但无终态的 SSE EOF、明确空failed/completed共享每HTTP请求10次总预算、transient含首轮3次、resource10次和180秒deadline；退避250ms起、2秒本地上限，尊重Retry-After。无输出的泛化400仅在历史完整且有约定ID时允许一次投影，认证/schema等不参与。保持模型、密钥、缓存/session和持久replayState；输出后不重放。预算用尽返回实际最后上游响应，安装版Harness仍可能报告原生`EMPTY_RESPONSE`，桥不伪造成功或新增空输出错误。
+
+可设置 `RHB_TOTAL_ATTEMPTS` / `RHB_TRANSIENT_ATTEMPTS` / `RHB_MAX_RETRY_DELAY_MS` / `RHB_RETRY_JITTER_RATIO`；`RHB_GENERIC_400_PROJECTION=false` 禁用泛化400候选，`RHB_HISTORY_STRATEGY=portable` 显式提前投影。诊断默认关闭；`RHB_DIAGNOSTICS_PATH` 启用有界脱敏JSONL，大小/轮转由 `RHB_DIAGNOSTICS_MAX_BYTES` / `RHB_DIAGNOSTICS_MAX_FILES` 控制。外层Harness另一次HTTP重发不属于桥内预算。其他客户端空完成策略不变。
 
 模型选择或子代理候选池接入，不等于已经具备 Azure item 历史恢复。恢复桥应放在实际 Responses 请求链上；不把它插在 Chat Completions 路径上并期待修复 Responses 错误。本文不自动修改用户现有配置或重启服务。
 

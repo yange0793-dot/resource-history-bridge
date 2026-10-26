@@ -420,10 +420,14 @@ test('upstream compressed error is not inspected or retried', async t => {
 });
 
 test('total deadline is shared across initial and recovery attempts', async t => {
+  const timers = [];
+  t.after(() => timers.forEach(clearTimeout));
+  // Allow process scheduling under the full matrix; 350 + 800 exceeds the
+  // shared 1000ms deadline but fits a deadline incorrectly reset on retry.
   const f = await fixture(t, (_req, res, number) => {
-    if (number === 1) setTimeout(() => json(res, 400, resourceError), 40);
-    else setTimeout(() => json(res, 200, '{}'), 55);
-  }, { timeoutMs: 70 });
+    timers.push(setTimeout(() => json(res, number === 1 ? 400 : 200,
+      number === 1 ? resourceError : '{}'), number === 1 ? 350 : 800));
+  }, { timeoutMs: 1000 });
   const result = await request(f.address);
   assert.equal(result.status, 504);
   assert.equal(f.received.length, 2);

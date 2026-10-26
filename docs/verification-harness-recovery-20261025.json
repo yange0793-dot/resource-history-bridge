@@ -1,0 +1,344 @@
+{
+  "date": "2026-10-25",
+  "revision": "Uncommitted Harness-only continuous recovery; code identity by SHA256, not claiming baseline commit includes changes.",
+  "baseCommit": "0b05c74069705146a27c8cf06313a536d744d172",
+  "status": "local_validation_complete",
+  "codeHashes": {
+    "cli.js": "6761f88780f3c5112350183fe22b72380a779e2157fe72f6fb7367bf893b84f8",
+    "index.js": "6f4c10c7f4b92bc1ae48bfa05270e783211cd07b6923b635e94ad1b4be73fac1",
+    "lib/bridge.js": "912c55a379c0e783a4d1d0e0cb958d6e081a044bdc52e7f1e52657ff295b29c2",
+    "lib/recovery.js": "8303b0463f19efa923b1ac9509468afd91c24aa5c3fdb8a735ba3181bcf2d906",
+    "lib/diagnostics.js": "12b3a7d8dd982b464696266055945fa72c219446fdd32c832d2acdfa0c1b7063",
+    "lib/history.js": "d7932ded3588bfa17d6fb9b783c56d7d2d6ac898d0efbfe79e2857e5c7ed1708",
+    "lib/output.js": "0cf3eb3e573f9d60686ebd148c16c93faba2bf19064a9e3461e1e7176b97041e",
+    "lib/messages.js": "639e78c458fc74129c3a6b4b3a0bc3a28beafc6326a8e936edfd4985a000e32b",
+    "lib/sse.js": "910b03e4d7755ba2dea59b917e4627fb4492ef454fa14a21287247cd53b7e8cd"
+  },
+  "defaultScope": "Harness native Responses only; minimal/codex/Messages defaults unchanged",
+  "recovery": {
+    "totalAttempts": 10,
+    "transientAttemptsIncludingOriginal": 3,
+    "resourceAttemptsIncludingOriginal": 10,
+    "deadlineMs": 180000,
+    "baseDelayMs": 250,
+    "localMaximumDelayMs": 2000,
+    "retryAfter": "Never shortened",
+    "lastFailure": "Actual upstream response retained",
+    "generic400": "Only one caller-validated full-history ID projection; not transient reclassification",
+    "outputBarrier": "Any text including whitespace/reasoning/tool/unknown/commit; no whole-request replay",
+    "identity": "No cache/session/key/model rotation or durable-history rewrite"
+  },
+  "localMacOS": [
+    {
+      "nodeLabel": "18",
+      "executable": "/Users/tufu/.npm/_npx/00073ba5d7c1f8bc/node_modules/node/bin/node",
+      "code": 0,
+      "tests": 616,
+      "pass": 616,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "elapsedMs": 5141,
+      "evidence": "/Users/tufu/Documents/deepseek-harness/default-workspace/resource-history-bridge-cc-resume-20261025/evidence/matrix-node18.tap"
+    },
+    {
+      "nodeLabel": "22",
+      "executable": "/Users/tufu/.npm/_npx/52027bd8fc0022aa/node_modules/node/bin/node",
+      "code": 0,
+      "tests": 616,
+      "pass": 616,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "elapsedMs": 4789,
+      "evidence": "/Users/tufu/Documents/deepseek-harness/default-workspace/resource-history-bridge-cc-resume-20261025/evidence/matrix-node22.tap"
+    },
+    {
+      "nodeLabel": "24",
+      "executable": "/usr/local/bin/node",
+      "code": 0,
+      "tests": 616,
+      "pass": 616,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "elapsedMs": 5049,
+      "evidence": "/Users/tufu/Documents/deepseek-harness/default-workspace/resource-history-bridge-cc-resume-20261025/evidence/matrix-node24.tap"
+    }
+  ],
+  "unchangedDuringMatrix": true,
+  "installedAdapter": {
+    "kind": "installed PiAiAdapter + local bridge + fault-injection mock; no real upstream requests",
+    "node": "v24.18.0",
+    "adapterVersion": "0.2.1-rc.1",
+    "adapterSha256": "cc4671266af974c4e78bcf0c65f5ef7651ca858ae5017392b1252dd4c2f234b5",
+    "ok": true,
+    "checks": 44,
+    "stages": [
+      {
+        "name": "tool-first",
+        "attempts": 1,
+        "clientCalls": 1,
+        "finish": "tool-calls",
+        "blockTypes": [
+          "reasoning",
+          "text",
+          "tool-call"
+        ],
+        "elapsedMs": 171,
+        "faults": [],
+        "requests": [
+          {
+            "sha256": "cea075d0f3f8971adb82bfa10b3c63bad77fcc190c158cc34f27cb3fb21d661d",
+            "itemIds": 0,
+            "encryptedItems": 0
+          }
+        ]
+      },
+      {
+        "name": "rate-failed-resource-tool-continuation",
+        "attempts": 4,
+        "clientCalls": 1,
+        "finish": "tool-calls",
+        "blockTypes": [
+          "reasoning",
+          "text",
+          "tool-call"
+        ],
+        "elapsedMs": 21,
+        "faults": [
+          "rate",
+          "failed",
+          "azure"
+        ],
+        "requests": [
+          {
+            "sha256": "932c62cf0d37a9a854a9a4cc35d50d94af0b53edfa185d3d8a6fd9278f4a4f75",
+            "itemIds": 3,
+            "encryptedItems": 1
+          },
+          {
+            "sha256": "932c62cf0d37a9a854a9a4cc35d50d94af0b53edfa185d3d8a6fd9278f4a4f75",
+            "itemIds": 3,
+            "encryptedItems": 1
+          },
+          {
+            "sha256": "932c62cf0d37a9a854a9a4cc35d50d94af0b53edfa185d3d8a6fd9278f4a4f75",
+            "itemIds": 3,
+            "encryptedItems": 1
+          },
+          {
+            "sha256": "05eb2656308c145ec64dbf95d6e2339e850fecdb32cb4e1bf5b66b40b3a0cecd",
+            "itemIds": 0,
+            "encryptedItems": 1
+          }
+        ]
+      },
+      {
+        "name": "generic400-final",
+        "attempts": 2,
+        "clientCalls": 1,
+        "finish": "stop",
+        "blockTypes": [
+          "text"
+        ],
+        "elapsedMs": 11,
+        "faults": [
+          "generic"
+        ],
+        "requests": [
+          {
+            "sha256": "3e1337c67dbe80c3ea27303db8b1b1138a9f74d4572558c6e8a6220fb6e1623a",
+            "itemIds": 6,
+            "encryptedItems": 2
+          },
+          {
+            "sha256": "38de9bc90106bc65f8a5a6c2ce7c1bb898390c7167f8564f0192ab05691ae820",
+            "itemIds": 0,
+            "encryptedItems": 2
+          }
+        ]
+      },
+      {
+        "name": "disconnect-before-headers",
+        "attempts": 2,
+        "clientCalls": 1,
+        "finish": "stop",
+        "blockTypes": [
+          "text"
+        ],
+        "elapsedMs": 10,
+        "faults": [
+          "disconnect"
+        ],
+        "requests": [
+          {
+            "sha256": "cea075d0f3f8971adb82bfa10b3c63bad77fcc190c158cc34f27cb3fb21d661d",
+            "itemIds": 0,
+            "encryptedItems": 0
+          },
+          {
+            "sha256": "cea075d0f3f8971adb82bfa10b3c63bad77fcc190c158cc34f27cb3fb21d661d",
+            "itemIds": 0,
+            "encryptedItems": 0
+          }
+        ]
+      },
+      {
+        "name": "empty-completed-recovers",
+        "attempts": 2,
+        "clientCalls": 1,
+        "finish": "stop",
+        "blockTypes": [
+          "text"
+        ],
+        "elapsedMs": 8,
+        "faults": [
+          "empty"
+        ],
+        "requests": [
+          {
+            "sha256": "cea075d0f3f8971adb82bfa10b3c63bad77fcc190c158cc34f27cb3fb21d661d",
+            "itemIds": 0,
+            "encryptedItems": 0
+          },
+          {
+            "sha256": "cea075d0f3f8971adb82bfa10b3c63bad77fcc190c158cc34f27cb3fb21d661d",
+            "itemIds": 0,
+            "encryptedItems": 0
+          }
+        ]
+      },
+      {
+        "name": "transient-budget-exhausted",
+        "attempts": 3,
+        "clientCalls": 1,
+        "finish": "error",
+        "blockTypes": [],
+        "elapsedMs": 11,
+        "faults": [
+          "failed",
+          "failed",
+          "failed"
+        ],
+        "requests": [
+          {
+            "sha256": "cea075d0f3f8971adb82bfa10b3c63bad77fcc190c158cc34f27cb3fb21d661d",
+            "itemIds": 0,
+            "encryptedItems": 0
+          },
+          {
+            "sha256": "cea075d0f3f8971adb82bfa10b3c63bad77fcc190c158cc34f27cb3fb21d661d",
+            "itemIds": 0,
+            "encryptedItems": 0
+          },
+          {
+            "sha256": "cea075d0f3f8971adb82bfa10b3c63bad77fcc190c158cc34f27cb3fb21d661d",
+            "itemIds": 0,
+            "encryptedItems": 0
+          }
+        ]
+      },
+      {
+        "name": "visible-output-no-replay",
+        "attempts": 1,
+        "clientCalls": 1,
+        "finish": "error",
+        "blockTypes": [],
+        "elapsedMs": 7,
+        "faults": [
+          "partial"
+        ],
+        "requests": [
+          {
+            "sha256": "cea075d0f3f8971adb82bfa10b3c63bad77fcc190c158cc34f27cb3fb21d661d",
+            "itemIds": 0,
+            "encryptedItems": 0
+          }
+        ]
+      }
+    ],
+    "cleanup": {
+      "bridgeListening": false,
+      "upstreamListening": false,
+      "sockets": 0
+    },
+    "evidence": "/Users/tufu/Documents/deepseek-harness/default-workspace/resource-history-bridge-cc-resume-20261025/evidence/harness-recovery-installed-adapter.json"
+  },
+  "extendedReplayProbe": {
+    "ok": true,
+    "checks": 91,
+    "requests": 17,
+    "failures": [],
+    "cleanup": {
+      "bridgeListening": false,
+      "upstreamListening": false,
+      "fixtureSockets": 0
+    },
+    "evidence": "/Users/tufu/Documents/deepseek-harness/default-workspace/resource-history-bridge-cc-resume-20261025/evidence/harness-extended-probe.json"
+  },
+  "syntheticLargeShape": {
+    "ok": true,
+    "requestBytes": 793919,
+    "toolPairs": 129,
+    "resourceIds": 185,
+    "toolSchemas": 67,
+    "stages": [
+      {
+        "name": "baseline",
+        "upstreamCalls": 1,
+        "elapsedMs": 55.93
+      },
+      {
+        "name": "generic400-projection",
+        "upstreamCalls": 2,
+        "elapsedMs": 30.74
+      }
+    ],
+    "projectionOnlyRemoved185Ids": true,
+    "cacheAndAuthPreserved": true,
+    "durableInputUnchanged": true,
+    "evidence": "/Users/tufu/Documents/deepseek-harness/default-workspace/resource-history-bridge-cc-resume-20261025/evidence/large-shape.json"
+  },
+  "actualCli": {
+    "ok": true,
+    "upstreamCalls": 2,
+    "logBytes": 3846,
+    "noSecretsInLog": true,
+    "listenerClosed": true,
+    "exitCode": 0,
+    "evidence": "/Users/tufu/Documents/deepseek-harness/default-workspace/resource-history-bridge-cc-resume-20261025/evidence/cli-recovery.json"
+  },
+  "liveSmoke": {
+    "kind": "One non-sensitive installed PiAiAdapter smoke through temporary candidate bridge to configured real upstream",
+    "ok": true,
+    "finish": "stop",
+    "expectedOutputReceived": true,
+    "outputBytes": 19,
+    "upstream": {
+      "host": "ps.air-outer.com",
+      "path": "/v1"
+    },
+    "cleanup": {
+      "bridgeListening": false
+    },
+    "evidence": "/Users/tufu/Documents/deepseek-harness/default-workspace/resource-history-bridge-cc-resume-20261025/evidence/live-smoke.json",
+    "boundary": "Ordinary real upstream smoke, not natural resource fault recovery or original long history completion"
+  },
+  "reusedPriorLongHistoryEvidence": "Portable neutralized long history got HTTP200 but incomplete at64 output tokens; native-ID variant timed out90s. These are prior evidence, not complete continuous-task acceptance.",
+  "notVerified": [
+    "Current revision on Windows/Linux CI",
+    "Complete Harness GUI end-to-end",
+    "Natural intermittent Azure fault in original long mixed history",
+    "Sustained concurrent workload or all suppliers"
+  ],
+  "delivery": {
+    "canonicalWorkingCopy": "/Users/tufu/Documents/zcode/resource-history-bridge",
+    "committed": false,
+    "pushed": false,
+    "productionChanged": false,
+    "clientsOrCredentialsChanged": false
+  },
+  "sourceWorkspace": "/Users/tufu/Documents/deepseek-harness/default-workspace/resource-history-bridge-cc-resume-20261025",
+  "completedAt": "2026-10-25T04:38:37.866Z"
+}

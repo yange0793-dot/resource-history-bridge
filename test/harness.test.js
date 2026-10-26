@@ -7,7 +7,7 @@ const { once } = require('node:events');
 const { createBridge } = require('..');
 
 const known = JSON.stringify({ error: { type: 'invalid_request_error', message: 'The requested item was created under a different Azure OpenAI resource.' } });
-const done = `event: response.completed\ndata: ${JSON.stringify({ type: 'response.completed', response: { status: 'completed', output: [] } })}\n\n`;
+const done = `event: response.completed\ndata: ${JSON.stringify({ type: 'response.completed', response: { status: 'completed', output: [{ type: 'message', role: 'assistant', content: [{ type: 'output_text', text: 'RESULT_42' }] }] } })}\n\n`;
 
 function history() {
   return { model: 'gpt-6.1-sol', stream: true, store: false, prompt_cache_key: 'harness_session_mock', input: [
@@ -91,19 +91,25 @@ test('Harness custom calls and inline tool updates may omit item IDs', async t =
   assert.deepEqual(projected.input.slice(4), body.input.slice(4));
 });
 
-test('Harness empty completion is not retried or replaced with an error', async t => {
-  const f = await fixture(t, res => send(res, 200, done));
-  assert.equal((await post(f.address, JSON.stringify(history()))).text, done);
-  assert.equal(f.requests.length, 1);
+test('Harness empty completion retries within transient budget and returns the actual last completion', async t => {
+  const empty = `event: response.completed\ndata: ${JSON.stringify({ type: 'response.completed', response: { status: 'completed', output: [] } })}\n\n`;
+  const f = await fixture(t, res => send(res, 200, empty));
+  assert.equal((await post(f.address, JSON.stringify(history()))).text, empty);
+  assert.equal(f.requests.length, 3);
+  assert.deepEqual(f.requests[0].bytes, f.requests[1].bytes);
+  assert.deepEqual(f.requests[1].bytes, f.requests[2].bytes);
 });
 
-test('Harness unrelated errors are returned without history projection', async t => {
+test('Harness generic 400 permits one validated projection and returns the actual last error', async t => {
   const error = '{"error":{"type":"invalid_request_error","message":"Unrelated invalid request"}}';
   const f = await fixture(t, res => send(res, 400, error));
   const result = await post(f.address, JSON.stringify(history()));
   assert.equal(result.status, 400);
   assert.equal(result.text, error);
-  assert.equal(f.requests.length, 1);
+  assert.equal(f.requests.length, 2);
+  const expected = history();
+  for (const item of expected.input) if (['message', 'reasoning', 'function_call'].includes(item.type)) delete item.id;
+  assert.deepEqual(JSON.parse(f.requests[1].bytes), expected);
 });
 
 test('Harness output commit prevents replay even if a resource error follows', async t => {

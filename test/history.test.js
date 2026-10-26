@@ -298,7 +298,7 @@ for (const [name, modify, code] of [
   ['function output for custom call', b => { b.input[7] = { type: 'function_call_output', call_id: b.input[6].call_id, output: '42' }; }, 'invalid_tool_pair'],
   ['custom output for function call', b => { b.input[4] = { type: 'custom_tool_call_output', id: 'keep', call_id: b.input[3].call_id, output: '42' }; }, 'invalid_tool_pair'],
   ['unknown top-level ID type', b => { b.input.push({ type: 'future_type', id: 'unknown' }); }, 'unsupported_item_id'],
-  ['standard tool output ID', b => { b.input[4].id = 'unknown'; }, 'unsupported_item_id'],
+  ['invalid standard tool output ID', b => { b.input[4].id = ''; }, 'invalid_item_id'],
   ['server previous_response_id', b => { b.previous_response_id = 'server'; }, 'server_history_reference'],
   ['server conversation', b => { b.conversation = { id: 'server' }; }, 'server_history_reference'],
   ['server item reference', b => { b.input.push({ type: 'item_reference', id: 'server' }); }, 'item_reference'],
