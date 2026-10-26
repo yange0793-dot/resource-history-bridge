@@ -2,42 +2,130 @@
   "date": "2026-10-26",
   "scope": "Standalone Codex/Harness native history and scoped AgentRouter HTTP400 parity. No Mixrouter runtime dependency or client configuration changes.",
   "history": {
-    "extendedModes": ["codex", "harness"],
-    "removableItemIds": ["message", "reasoning", "function_call", "function_call_output"],
+    "extendedModes": [
+      "codex",
+      "harness"
+    ],
+    "removableItemIds": [
+      "message",
+      "reasoning",
+      "function_call",
+      "function_call_output"
+    ],
     "outputRequirement": "Identified standard outputs require a nonempty ID, absent/completed status, complete inline string or text/image array and unique ordered tool pairing.",
     "reasoning": "Identified reasoning requires valid summary and optional content/encrypted fields; content:null retained.",
-    "preserved": ["encrypted_content", "call_id", "tool payloads", "custom/additional item IDs", "model", "effort", "authentication", "session/cache identity"],
+    "preserved": [
+      "encrypted_content",
+      "call_id",
+      "tool payloads",
+      "custom/additional item IDs",
+      "model",
+      "effort",
+      "authentication",
+      "session/cache identity"
+    ],
     "minimalAndLegacyNoIdOutput": "Unchanged"
   },
   "scoped400": {
-    "hosts": ["ps.air-outer.com", "agentrouter.org"],
+    "hosts": [
+      "ps.air-outer.com",
+      "agentrouter.org"
+    ],
     "status": 400,
     "envelope": "Pure {error} with required message,type,param,code. Exact trace-suffixed message; invalid_request_error, empty param, null code.",
     "policy": "One projection, repeated identical bytes within existing resource budget. Independent of Harness broad generic400 flag.",
-    "barriers": ["authentication", "schema", "content filtering", "output", "unknown frames", "partial tails", "unknown hosts", "typed SSE"]
+    "barriers": [
+      "authentication",
+      "schema",
+      "content filtering",
+      "output",
+      "unknown frames",
+      "partial tails",
+      "unknown hosts",
+      "typed SSE"
+    ]
   },
   "localMacOS": [
-    {"node": "18.20.8", "tests": 825, "pass": 825, "fail": 0, "skip": 0},
-    {"node": "22.23.3", "tests": 825, "pass": 825, "fail": 0, "skip": 0},
-    {"node": "24.18.0", "tests": 825, "pass": 825, "fail": 0, "skip": 0}
+    {
+      "node": "18.20.8",
+      "tests": 827,
+      "pass": 827,
+      "fail": 0,
+      "skip": 0
+    },
+    {
+      "node": "22.23.3",
+      "tests": 827,
+      "pass": 827,
+      "fail": 0,
+      "skip": 0
+    },
+    {
+      "node": "24.18.0",
+      "tests": 827,
+      "pass": 827,
+      "fail": 0,
+      "skip": 0
+    }
   ],
   "retainedFailure": {
-    "node": "18.20.8", "pass": 824, "fail": 1,
+    "node": "18.20.8",
+    "pass": 824,
+    "fail": 1,
     "test": "total deadline is shared across initial and recovery attempts",
     "observation": "Legacy 70ms fixture observed one instead of two attempts while taking151ms; unchanged isolated suite passed.",
     "repair": "Fixture uses350+800ms against shared1000ms and cleans timers; still distinguishes a deadline reset on retry. No runtime timeout changed."
   },
   "installedCodexLoopback": {
-    "client": "Codex0.164.0", "historyItems": 152,
-    "azureWrapper": {"exit": 0, "requests": 2, "turnCompleted": true, "exactProjection": true},
-    "scopedGeneric400": {"exit": 0, "requests": 2, "turnCompleted": true, "exactProjection": true},
+    "client": "Codex0.164.0",
+    "historyItems": 152,
+    "azureWrapper": {
+      "exit": 0,
+      "requests": 2,
+      "turnCompleted": true,
+      "exactProjection": true
+    },
+    "scopedGeneric400": {
+      "exit": 0,
+      "requests": 2,
+      "turnCompleted": true,
+      "exactProjection": true
+    },
     "originalHistoryUnchanged": true,
     "usesMixrouter": false,
     "realUpstream": false
   },
-  "installedHarnessParity": {"checks": 71, "stages": 11, "pass": true, "loopbackOnly": true, "listenersAndSocketsClosed": true},
+  "installedHarnessParity": {
+    "checks": 71,
+    "stages": 11,
+    "pass": true,
+    "loopbackOnly": true,
+    "listenersAndSocketsClosed": true
+  },
+  "installedHarnessFull": {
+    "checks": 91,
+    "pass": true,
+    "loopbackOnly": true,
+    "listenersAndSocketsClosed": true
+  },
   "diagnosticsFinalAffectedCheck": "Passed after allowlisting new fixed recovery/rejection enums; unchanged scope reuses full matrix evidence.",
-  "ci": {"status": "pending", "matrix": "Ubuntu/macOS/Windows x Node18/22/24; actual Windows PowerShell startup checks"},
-  "delivery": {"committed": false, "pushed": false, "deployed": false},
-  "notVerified": ["Natural original-conversation fault after deployment", "All vendors and history types", "Long-running sustained workloads"]
+  "ci": {
+    "status": "pending",
+    "matrix": "Ubuntu/macOS/Windows x Node18/22/24; actual Windows PowerShell startup checks",
+    "retainedFailedRuns": [
+      40255210088,
+      40255236593
+    ],
+    "initialFailure": "All Windows nodes failed partial diagnostic-write rollback; macOS/Linux passed. Added same-inode nonappend descriptor fallback for rollback; final CI pending."
+  },
+  "delivery": {
+    "committed": false,
+    "pushed": false,
+    "deployed": false
+  },
+  "notVerified": [
+    "Natural original-conversation fault after deployment",
+    "All vendors and history types",
+    "Long-running sustained workloads"
+  ]
 }

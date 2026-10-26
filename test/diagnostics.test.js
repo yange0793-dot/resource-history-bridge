@@ -414,6 +414,129 @@ test('partial synchronous writes are completed and failed partial lines are roll
   assert.equal(fs.readFileSync(file, 'utf8'), original);
 });
 
+test('append-handle truncation failure reopens the same file without append and rolls back the partial line', t => {
+  const directory = temporary(t);
+  const file = path.join(directory, 'events.jsonl');
+  const diagnostics = createDiagnostics({ enabled: true, filePath: file });
+  diagnostics.emit({ type: 'request' });
+  const original = fs.readFileSync(file, 'utf8');
+  const write = fs.writeSync;
+  const truncate = fs.ftruncateSync;
+  const open = fs.openSync;
+  const close = fs.closeSync;
+  const opens = [];
+  const truncations = [];
+  const closed = [];
+  let writes = 0;
+  let appendFd;
+  try {
+    fs.openSync = (target, flags, ...args) => {
+      const fd = open(target, flags, ...args);
+      opens.push({ target, flags, fd });
+      if (flags & fs.constants.O_APPEND) appendFd = fd;
+      return fd;
+    };
+    fs.writeSync = (fd, buffer, offset, length) => {
+      if (++writes > 1) throw new Error('Synthetic disk full after partial write');
+      return write(fd, buffer, offset, Math.min(5, length));
+    };
+    fs.ftruncateSync = (fd, length) => {
+      truncations.push({ fd, length });
+      if (fd === appendFd) throw new Error('Synthetic append handle cannot truncate');
+      return truncate(fd, length);
+    };
+    fs.closeSync = fd => { closed.push(fd); return close(fd); };
+    assert.doesNotThrow(() => diagnostics.emit({ type: 'request' }));
+  } finally {
+    fs.writeSync = write;
+    fs.ftruncateSync = truncate;
+    fs.openSync = open;
+    fs.closeSync = close;
+    diagnostics.close();
+  }
+  assert.equal(writes, 2);
+  assert.equal(truncations.length, 2);
+  const appendIndex = opens.findIndex(entry => entry.fd === appendFd && entry.flags & fs.constants.O_APPEND);
+  const rollback = opens[appendIndex + 1];
+  assert.ok(appendIndex >= 0);
+  assert.ok(rollback);
+  assert.equal(rollback.target, file);
+  assert.equal(rollback.flags & fs.constants.O_APPEND, 0);
+  assert.equal(rollback.flags & fs.constants.O_TRUNC, 0);
+  assert.equal(rollback.flags & fs.constants.O_CREAT, 0);
+  assert.equal(rollback.flags & fs.constants.O_WRONLY, fs.constants.O_WRONLY);
+  if (fs.constants.O_NOFOLLOW) assert.equal(rollback.flags & fs.constants.O_NOFOLLOW, fs.constants.O_NOFOLLOW);
+  assert.deepEqual(truncations, [
+    { fd: appendFd, length: Buffer.byteLength(original) },
+    { fd: rollback.fd, length: Buffer.byteLength(original) }
+  ]);
+  assert.ok(closed.includes(appendFd));
+  assert.ok(closed.includes(rollback.fd));
+  assert.equal(fs.readFileSync(file, 'utf8'), original);
+  assert.deepEqual(JSON.parse(fs.readFileSync(file, 'utf8')), { type: 'request' });
+});
+
+test('append rollback refuses a reopened file whose identity changed without truncating it', t => {
+  const directory = temporary(t);
+  const file = path.join(directory, 'events.jsonl');
+  const diagnostics = createDiagnostics({ enabled: true, filePath: file });
+  diagnostics.emit({ type: 'request' });
+  const original = fs.readFileSync(file, 'utf8');
+  const write = fs.writeSync;
+  const truncate = fs.ftruncateSync;
+  const stat = fs.fstatSync;
+  const open = fs.openSync;
+  const close = fs.closeSync;
+  const truncated = [];
+  const closed = [];
+  let writes = 0;
+  let appendFd;
+  let rollbackFd;
+  let needsRollback = false;
+  try {
+    fs.openSync = (target, flags, ...args) => {
+      const fd = open(target, flags, ...args);
+      if (flags & fs.constants.O_APPEND) appendFd = fd;
+      else if (needsRollback) rollbackFd = fd;
+      return fd;
+    };
+    fs.writeSync = (fd, buffer, offset, length) => {
+      if (++writes > 1) throw new Error('Synthetic disk full after partial write');
+      return write(fd, buffer, offset, Math.min(5, length));
+    };
+    fs.ftruncateSync = (fd, length) => {
+      truncated.push(fd);
+      if (fd === appendFd) {
+        needsRollback = true;
+        throw new Error('Synthetic append handle cannot truncate');
+      }
+      return truncate(fd, length);
+    };
+    fs.fstatSync = fd => {
+      const current = stat(fd);
+      if (fd === rollbackFd) {
+        return { isFile: () => true, nlink: current.nlink, uid: current.uid, dev: current.dev, ino: current.ino + 1 };
+      }
+      return current;
+    };
+    fs.closeSync = fd => { closed.push(fd); return close(fd); };
+    assert.doesNotThrow(() => diagnostics.emit({ type: 'request' }));
+  } finally {
+    fs.writeSync = write;
+    fs.ftruncateSync = truncate;
+    fs.fstatSync = stat;
+    fs.openSync = open;
+    fs.closeSync = close;
+    diagnostics.close();
+  }
+  assert.equal(writes, 2);
+  assert.notEqual(rollbackFd, undefined);
+  assert.deepEqual(truncated, [appendFd]);
+  assert.ok(closed.includes(appendFd));
+  assert.ok(closed.includes(rollbackFd));
+  assert.equal(fs.readFileSync(file, 'utf8'), original + '{"typ');
+});
+
 test('existing archives are tightened to private permissions without changing directory permissions', t => {
   if (process.platform === 'win32') return;
   const directory = temporary(t);
