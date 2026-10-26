@@ -1,0 +1,54 @@
+{
+  "version": "transparent-recovery-20261026",
+  "date": "2026-10-26",
+  "commit": "d1effd144262ff60558e32d97feb5b430e6c8895",
+  "sourceBranch": "feat/transparent-recovery-20261026",
+  "whatChanged": [
+    "transparentRecovery: hidden pre-output retries for official AgentRouter 408/409/temporary 429/5xx and pre-output connection failures",
+    "unprojected_resource_retry: complete but unprojectable history (completed web_search_call with an upstream id) is retried with byte-identical current bytes, reported as projectionSkipped",
+    "comment-only SSE heartbeats treated as transport metadata instead of output barriers",
+    "legacy explicit budgets outside the transparent envelope pin transparent recovery off",
+    "createTurnContinuation with Codex app-server and Harness adapters (host-attested snapshots required)",
+    "continuation timers referenced so a pending run cannot be silently cancelled by an empty event loop"
+  ],
+  "localMatrix": [
+    { "node": "v18.20.8", "tests": 1608, "pass": 1608, "fail": 0, "cancelled": 0, "skipped": 0 },
+    { "node": "v22.23.2", "tests": 1608, "pass": 1608, "fail": 0, "cancelled": 0, "skipped": 0 },
+    { "node": "v24.18.0", "tests": 1608, "pass": 1608, "fail": 0, "cancelled": 0, "skipped": 0 }
+  ],
+  "newSuites": {
+    "test/transparent-recovery.test.js": 119,
+    "test/turn-continuation.test.js": 28,
+    "test/client-continuation.test.js": 24
+  },
+  "installedClient": {
+    "harnessProbe": { "checks": 91, "failed": 0, "result": "pass", "evidenceKind": "installed PiAiAdapter against loopback mock" },
+    "harnessParityProbe": { "checks": 24, "failed": 0, "result": "pass", "note": "the legacy comparison bridge now pins transparentRecovery:false so the old single-attempt classification stays comparable" }
+  },
+  "crossPlatformCi": [
+    {
+      "run": "40308130259",
+      "commit": "8cb0d26",
+      "result": "all green",
+      "note": "ubuntu/macos/windows x Node 18/22/24"
+    },
+    {
+      "run": "40308201801",
+      "commit": "8cb0d26",
+      "result": "green after re-running the Windows Node 24 job",
+      "note": "first attempt failed only in the PowerShell 5.1 launcher subset with 'Windows launcher requires powershell.exe or pwsh'. The same job passed in the sibling run and passes on re-run; the launcher was not changed in this revision. Recorded as an environment/toolchain flake, not a code fix."
+    }
+  ],
+  "localRelease": {
+    "release": "/Users/tufu/.local/share/resource-history-bridge/releases/transparent-recovery-20261026-183356",
+    "healthEndpoint": "ok",
+    "runtimeHashesMatch": true,
+    "profileSha256Unchanged": true,
+    "smoke": "release launcher against a loopback 503-then-200 mock returned 200 after three upstream calls, no intermediate error reached the client"
+  },
+  "notVerified": [
+    "No natural AgentRouter Azure failure was reproduced end to end for the transparent path.",
+    "No real desktop Codex/Harness client drove the continuation adapters; those are tested against mock native contracts only.",
+    "The Harness desktop session still requires a host that supplies readSnapshot and awaitTurn; that integration is not shipped here."
+  ]
+}
