@@ -19,7 +19,9 @@ $env:RHB_CLIENT = 'codex'
 node .\cli.js
 ```
 
-默认上游为 `https://agentrouter.org/v1`，官方备用入口可显式设置为 `https://ps.air-outer.com/v1`。其他远程主机和官方域名的 HTTP 地址会被拒绝；已有本机代理及测试可使用固定 loopback 上游，不代表支持其他供应商。
+默认上游为 `https://agentrouter.org/v1`，官方备用入口可显式设置为 `https://ps.air-outer.com/v1`。只对这两个 HTTPS 官方主机启用恢复。设置其他 HTTP(S) 上游时正常启动，进入原协议透传：不投影历史、不重试、不进行 Messages → Responses 转换，不因为供应商不同而报错。上游自身返回的错误仍原样交给客户端；生产连接建议使用 HTTPS。
+
+按请求实际发往的固定上游 URL 自动识别，不需要额外声明或开关。本机代理不是可识别的官方目标，因此也仅透传，不猜测代理后的供应商。桥不会自动跟踪客户端或代理的供应商切换；固定上游改变后需用新的启动环境重启桥。
 
 也可双击 `scripts/start-macos.command`，或运行 `scripts/start-windows.ps1`。启动脚本只询问客户端类型，留空选择 `codex`；已有 `RHB_CLIENT` 或旧 `RHB_HISTORY_MODE` 时不再询问。等待启动信息确认监听成功，按 `Ctrl+C` 停止。
 
@@ -41,7 +43,7 @@ node .\cli.js
 
 - 原生 Responses 默认首请求保留原 JSON 字节；恢复不删除加密 reasoning、工具 `call_id`、参数或结果。Codex / Harness 使用各自的完整历史校验契约，不是删除所有 ID。
 - 直接配置官方 AgentRouter 主机时，严格匹配的一种 HTTP 400 `{error}` 历史包装也参与资源恢复；不是所有 400 都重试。本机代理不能通过 header 冒充官方主机。
-- `harness` 原生 Responses 另有有界瞬时/明确空终态恢复。`codex`、`generic` 与 Messages 转换默认不因空完成重试，不制造额外空输出错误。
+- 面向 AgentRouter 的 `harness` 原生 Responses 另有有界瞬时/明确空终态恢复。`codex`、`generic` 与 Messages 转换默认不因空完成重试，不制造额外空输出错误；其他上游不启用这些恢复策略。
 - Messages 转换只处理明确可表达的内容，不是所有协议无损互转。Chat Completions 仅透传；`/responses/compact` 不参与历史恢复。
 - 输出、未知内容或下游提交后不整轮重放。不可恢复的上游错误如实呈现，不伪造成功。
 
@@ -57,4 +59,8 @@ node .\cli.js
 node --test
 ```
 
-测试使用 loopback mock，不需要真实 key。本轮 AgentRouter 聚焦重构在本机 Node.js 18/22/24 各 887/887；安装版 Codex 的 152 项复制历史在两类故障注入下均完成精确投影，Harness 的 71 项与 91 项检查通过。Windows/macOS/Linux × Node.js 18/22/24 九个 CI 组合全部通过，Windows PowerShell 7/5.1 实际启动测试通过，见 [本轮记录](docs/verification-agentrouter-focus-20261026.json)；自然上游故障和长期负载不在本轮验证范围。
+测试使用 loopback mock，不需要真实 key。恢复用例保留官方目标 URL，测试专用传输映射将请求送到本机 mock；其他目标的透传用例检查原始字节、单次请求、状态与协议不被改变。
+
+本次目标识别与透传修改在本机 Node.js 18/22/24 各 946/946；恢复原有伪造主机组合用例后，受影响文件在三版 Node 各 29/29。安装版 Codex 的 152 项复制历史在两类故障注入下均完成精确投影，Harness 的 71 项与 91 项检查通过，见 [本次记录](docs/verification-provider-scope-20261026.json)。未运行本次版本的跨平台 CI，未提交或推送，也未改客户端配置或重启服务。
+
+此前版本的九个跨平台 CI 组合及 Windows PowerShell 7/5.1 启动检查见 [历史记录](docs/verification-agentrouter-focus-20261026.json)，不当作本次版本证据。自然上游故障和长期负载不在本轮验证范围。

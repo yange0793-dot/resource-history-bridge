@@ -5,6 +5,7 @@ const assert = require('node:assert/strict');
 const http = require('node:http');
 const { once } = require('node:events');
 const { createBridge } = require('../lib/bridge');
+const { mockAgentRouter } = require('../scripts/mock-agentrouter.cjs');
 const { decideResourceRecovery } = require('../lib/recovery');
 
 const resource = JSON.stringify({ error: {
@@ -38,8 +39,9 @@ async function fixture(t, handler, options = {}) {
     for (const socket of sockets) socket.destroy();
     await new Promise(resolve => upstream.close(resolve));
   });
+  t.after(mockAgentRouter(upstream.address().port));
   bridge = createBridge({
-    upstream: `http://127.0.0.1:${upstream.address().port}/v1`, timeoutMs: 2000, retryDelayMs: 0,
+    upstream: 'https://agentrouter.org/v1', timeoutMs: 2000, retryDelayMs: 0,
     retryJitterRatio: 0, diagnostics: { enabled: true, onEvent: event => events.push(event) }, ...options
   });
   const address = await bridge.listen(0);

@@ -4,11 +4,15 @@
 
 这是面向 **AgentRouter** 的独立本机组件，适配 Codex 原生 Responses、DeepSeek Harness PiAiAdapter 原生 Responses，以及 Claude Code 的 Messages → Responses。Node.js 核心与 macOS / Windows 启动入口不依赖 Mixrouter、管理工具或第三方 npm 包。
 
-默认固定上游 `https://agentrouter.org/v1`，官方备用入口 `https://ps.air-outer.com/v1`。运行时拒绝其他远程主机及官方域名的 HTTP 地址；URL 不得含用户名、密码、query 或 fragment。为用户已有本机代理和测试保留固定 loopback 上游，不扩展为其他供应商支持。客户端不能通过请求 URL、正文或 header 改变代理目标。
+默认固定上游 `https://agentrouter.org/v1`，官方备用入口 `https://ps.air-outer.com/v1`。仅这两个精确匹配的 HTTPS 官方主机默认启用恢复与协议转换。其他固定 HTTP(S) 上游正常启动并原协议透传，不因为供应商不同而报错；不意味着为其提供恢复适配。URL 不得含用户名、密码、query 或 fragment，必须有主机；生产使用 HTTPS。客户端不能通过请求 URL、正文或 header 改变代理目标。
+
+按请求实际发往的固定上游 URL 自动识别，无需声明或额外开关。固定 loopback 上游也仅透传，避免本机多供应商代理被误当作 AgentRouter。不从请求正文、header、错误内容或相似域名猜测供应商，不检查或自动跟踪代理内部路由。固定上游改变后需用新的启动配置重启桥。
+
+透传模式无论客户端预设、portable、generic400Projection 或 automaticRecovery 设置如何，都不投影历史、不重试、不转换 Messages。请求 JSON 字节、模型、历史 ID、加密 reasoning、工具参数/结果及原协议认证均保留；上游状态、响应正文和内容编码直接转发，不进行恢复缓冲或强制 identity 编码。固定 `/messages?beta=true` 的 beta 标记在透传时保留。显式统一 key / User-Agent 覆盖仍按配置生效，HTTP hop-by-hop header 仍按代理规范移除。安全检查、application/json Content-Type 要求、请求上限、超时及传输失败处理仍有效。透传路径不解析或校验 JSON 正文，并可直接转发压缩请求体；启用 AgentRouter 恢复的路径仍要求未压缩的合法 JSON 对象。“不因供应商报错”不表示隐藏上游错误或忽略非法配置。
 
 只绑定 `127.0.0.1` / `::1` / `localhost`，检查 Host、拒绝 Origin / Sec-Fetch-Site、不启用 CORS。它是没有独立多用户鉴权的单机单用户桥，不能隔离同机恶意进程；统一 key 可能被能访问端口的进程消耗。不得公开端口、远程转发或共享给其他用户。
 
-接受 JSON POST `/responses`、`/responses/compact`、`/chat/completions`、`/messages`，也接受这些路径的 `/v1` 前缀。Messages 固定 `?beta=true` 路径可接受，其他 query 不接受。Chat Completions 仅透传；compact 不参与资源或空输出恢复。
+接受 JSON POST `/responses`、`/responses/compact`、`/chat/completions`、`/messages`，也接受这些路径的 `/v1` 前缀。Messages 固定 `?beta=true` 路径可接受：AgentRouter 转换路径不把它传给 Responses，其他目标的 Messages 透传保留该 query；其他 query 不接受。Chat Completions 仅透传；compact 不参与资源或空输出恢复。
 
 ## 客户端预设与兼容性
 
@@ -23,7 +27,7 @@
 
 直接 CLI 未设置该变量时使用 `generic` 兼容默认值。交互启动脚本在 `RHB_CLIENT` 和旧 `RHB_HISTORY_MODE` 都未设置时，仅询问客户端类型、留空默认 `codex`。旧显式 `RHB_HISTORY_MODE`、`RHB_UPSTREAM_PROTOCOL` 及其他环境选项优先于预设，不能把预设名当成“必然启用转换”而忽略旧覆盖。
 
-启动信息仅显示脱敏上游、实际模式、认证来源与监听地址，不输出凭据。桥不自动读取或改写客户端/管理工具的配置，不管理模型池、effort、计费或渠道选择。
+启动信息仅显示脱敏上游、自动识别的恢复启用状态、历史预设、实际协议、认证来源与监听地址，不输出凭据。非 AgentRouter 目标实际协议始终为 passthrough，所显示的历史预设不代表投影已启用。桥不自动读取或改写客户端/管理工具的配置，不管理模型池、effort、计费或渠道选择。
 
 ## 资源恢复与提交边界
 
@@ -54,7 +58,7 @@ typed SSE、普通参数错误、权限/认证/内容拦截、额外输出或未
 
 该规则默认可用，不依赖 Harness 的 `generic400Projection` 开关，但不证明错误内部的 Azure 原因，不是所有 400 的重试规则，也不启用其他客户端空响应恢复。
 
-固定 loopback 代理不满足官方主机条件，即使它实际连接 AgentRouter。代理应原样转发可识别的 Azure 错误，或自身集成恢复；不存在 trusted-header 绕过。Harness 的受限泛化 400 候选是独立策略，不能用于证明代理的官方身份。
+固定 loopback 代理不满足官方主机条件，即使它实际连接 AgentRouter。所有恢复及 Messages 转换均关闭，仅转发原协议；不存在 trusted-header 或错误内容绕过。Harness 的受限泛化 400 候选也是已识别 AgentRouter 后的策略，不能用于证明代理的官方身份。
 
 ## Codex 历史投影契约
 
@@ -93,7 +97,7 @@ CLI 选 `RHB_CLIENT=harness`，或旧 `RHB_HISTORY_MODE=harness`；库用 `histo
 
 ### Harness 连续恢复
 
-默认只对 `harness` 的**原生 `/responses`**启用：
+默认只对已识别 AgentRouter 目标的 `harness` **原生 `/responses`**启用：
 
 - 408 / 429 / 5xx、明确服务/过载错误，包括无 event/type 的纯 `{error}` SSE 帧。
 - 输出前连接失败，或完整空/仅元数据、无终态的 SSE EOF。
@@ -106,7 +110,7 @@ CLI 选 `RHB_CLIENT=harness`，或旧 `RHB_HISTORY_MODE=harness`；库用 `histo
 
 ## Messages 转换
 
-`RHB_CLIENT=claude-code` 或显式 `RHB_UPSTREAM_PROTOCOL=responses` 将 `/messages` 转为 `/responses` 并转换回 Messages。转换复用 MIT 许可模块，来源版本和许可证见 `lib/vendor/NOTICE`、`lib/vendor/LICENSE`；运行不需要 Mixrouter，不读取其配置或端口。
+仅在识别到 AgentRouter 目标时，`RHB_CLIENT=claude-code` 或显式 `RHB_UPSTREAM_PROTOCOL=responses` 才将 `/messages` 转为 `/responses` 并转换回 Messages。其他目标始终保留 Messages 协议，客户端与上游须原协议兼容。转换复用 MIT 许可模块，来源版本和许可证见 `lib/vendor/NOTICE`、`lib/vendor/LICENSE`；运行不需要 Mixrouter，不读取其配置或端口。
 
 转换是受约束的字段映射，不承诺模型/协议身份完全无损：
 
@@ -149,7 +153,7 @@ async function main() {
 
 ### 保留的高级环境设置
 
-日常优先只设置 client、可选 upstream 和 port。以下旧显式选项保留，适合确知边界的库/CLI 集成：
+日常优先只设置 client、可选 upstream 和 port，不需要供应商声明开关。以下旧显式选项保留，适合确知边界的库/CLI 集成；恢复和转换相关选项不能为非 AgentRouter 目标启用这些行为：
 
 | 环境变量 | 默认值 / 范围 | 用途 |
 | --- | --- | --- |
@@ -178,7 +182,7 @@ async function main() {
 
 ## 排除项
 
-- 其他远程供应商、通用网关、模型池/路由/计费管理。
+- 其他供应商的恢复适配（仅透传）、通用网关、模型池/路由/计费管理。
 - 所有 Agent 零配置接入、封闭 endpoint 客户端、所有管理工具版本兼容。
 - 多用户/远程访问、浏览器 CORS、云服务或后台服务安装。
 - 所有协议无损互转；Chat → Responses 转换。
@@ -188,13 +192,16 @@ async function main() {
 
 ## 验证记录与未核范围
 
-验证按版本、执行环境和故障来源区分；历史数字不自动继承给新代码。本轮 AgentRouter 聚焦重构已完成本机三版 Node 全量测试及安装客户端/adapter 的 loopback 验证，跨平台状态见本轮记录，不以旧 CI 代替。
+验证按版本、执行环境和故障来源区分；历史数字不自动继承给新代码。本次目标识别与非 AgentRouter 透传修改已通过本机三版 Node 全量及安装客户端/adapter 的 loopback 验证，未运行本次跨平台 CI，不以旧 CI 代替。
+
+恢复测试在保留官方目标 URL 的同时，通过测试专用传输映射将 HTTP 请求送到本机 mock；不增加生产声明开关，不读取真实 key，也不实际出网。其他目标用例验证仅一次上游调用、请求/响应字节与协议保持、错误原样转发。
 
 - `node --test`：跨平台单测，使用 loopback mock，无需真实 key 或安装 Harness。
 - `node scripts/verify-harness.mjs` / `node scripts/verify-harness-parity.mjs`：安装版 PiAiAdapter 的定向 loopback 验证，不读取用户 profile/key，不修改安装文件，不冒充完整 GUI 或真实渠道实跑。需满足安装版要求（当前 ≥22.19），可用 `RHB_HARNESS_MODULES` 指定 `dsh/node_modules`；缺依赖即明确失败，不伪记通过。
 
 | 记录 | 能证明什么 | 不能证明什么 |
 | --- | --- | --- |
+| [2026-10-26 目标识别与透传](verification-provider-scope-20261026.json) | 本机 Node.js 18/22/24 各 946/946；后续恢复原始伪造主机组合后受影响文件各 29/29。其他目标单次调用、原字节/协议/编码、上游错误透传；安装版 Codex 152 项两类注入均精确投影完成，Harness 71/91 项通过并清理临时资源。 | 未跑本次跨平台 CI，未提交推送或部署；不证明自然上游故障恢复率、所有历史或长期负载。 |
 | [2026-10-26 AgentRouter 聚焦](verification-agentrouter-focus-20261026.json) | 本机 Node.js 18/22/24 各 887/887；安装版 Codex 152 项复制历史的 Azure 包装与严格400注入均精确投影后完成；安装版 Harness 71 项与 91 项检查通过，临时 listener/socket 全关闭。候选两轮及合入 main 的 Windows/macOS/Linux × Node18/22/24 九个 CI 组合全部通过，Windows PowerShell7/5.1 实际启动检查通过。 | 不证明自然上游故障恢复率、所有历史类型、管理工具版本或长期负载；未修改本地客户端或重启现有服务。 |
 | [2026-10-26 Codex 同步](verification-codex-parity-20261026.json) | 此前 runtime cc89085：macOS Node.js 18/22/24 各 827/827；Ubuntu/macOS/Windows × 三版 Node 九个 CI job 成功，实际 PowerShell 启动检查。安装版 Codex 0.164.0 对 loopback 故障 mock 完成 152 项历史投影与工具续接；Harness parity 71 项、完整 91 项检查通过。 | 不验证本轮聚焦重构；Codex 故障与恢复响应均为 mock，不是自然 AgentRouter 跨资源故障；不覆盖所有历史或持续负载。 |
 | [2026-10-25 资源恢复](verification-resource-only-20261025.json) | 历史版本的真实 macOS Claude Code 工具续接、Codex 本机注入后真实 AgentRouter 恢复响应，以及小型 encrypted reasoning 两工具 API 对照；旧跨平台启动/恢复结果。 | 注入错误不来自真实上游；小型 API 对照不等于 Codex 长混合 CLI 历史通过，失败与限流样本仍保留。 |

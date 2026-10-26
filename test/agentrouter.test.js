@@ -4,8 +4,9 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const http = require('node:http');
 const { once } = require('node:events');
-const { DEFAULT_UPSTREAM, validateAgentRouterUpstream } = require('../lib/agentrouter');
+const { DEFAULT_UPSTREAM, validateAgentRouterUpstream, isAgentRouterUpstream } = require('../lib/agentrouter');
 const { createBridge } = require('../index');
+const { mockAgentRouter } = require('../scripts/mock-agentrouter.cjs');
 
 function post(port, key, body) {
   return new Promise((resolve, reject) => {
@@ -31,7 +32,9 @@ async function fixture(t, handle, options = {}) {
     upstream.closeAllConnections();
     await closed;
   });
-  const bridge = createBridge({ upstream: `http://127.0.0.1:${upstream.address().port}/v1`, historyMode: 'codex', resourceAttempts: 2, retryDelayMs: 0, ...options });
+  t.after(mockAgentRouter(upstream.address().port));
+  const config = typeof options === 'function' ? options(upstream.address().port) : options;
+  const bridge = createBridge({ upstream: 'https://agentrouter.org/v1', historyMode: 'codex', resourceAttempts: 2, retryDelayMs: 0, ...config });
   await bridge.listen(0);
   t.after(() => bridge.close());
   return bridge.server.address().port;
@@ -59,13 +62,14 @@ test('library defaults can start a loopback listener without an explicit upstrea
 });
 
 for (const url of ['https://agentrouter.org/v1', 'https://ps.air-outer.com/v1', 'https://AGENTROUTER.ORG/v1',
-  'http://127.0.0.1:1234/v1', 'http://localhost:1234/v1', 'http://[::1]:1234/v1', 'https://localhost:1234/v1']) {
+  'http://127.0.0.1:1234/v1', 'http://localhost:1234/v1', 'http://[::1]:1234/v1', 'https://localhost:1234/v1',
+  'http://agentrouter.org/v1', 'http://ps.air-outer.com/v1', 'https://example.com/v1',
+  'https://agentrouter.org.evil.example/v1', 'https://agentrouter.org./v1', 'https://127.0.0.1.evil.example/v1',
+  'http://0.0.0.0/v1', 'http://192.168.1.1/v1']) {
   test(`upstream contract accepts ${url}`, () => assert.equal(validateAgentRouterUpstream(url).href, new URL(url).href));
 }
 
-for (const url of ['http://agentrouter.org/v1', 'http://ps.air-outer.com/v1', 'https://example.com/v1',
-  'https://agentrouter.org.evil.example/v1', 'https://agentrouter.org./v1', 'https://127.0.0.1.evil.example/v1',
-  'http://0.0.0.0/v1', 'http://192.168.1.1/v1', 'file:///tmp/mock',
+for (const url of ['file:///tmp/mock', 'ftp://agentrouter.org/v1', 'not-a-url',
   'https://MOCK_USER:MOCK_SECRET@agentrouter.org/v1', 'https://agentrouter.org/v1?key=MOCK_SECRET', 'https://agentrouter.org/v1#mock']) {
   test(`upstream contract rejects ${url}`, () => {
     assert.throws(() => validateAgentRouterUpstream(url));
@@ -79,6 +83,23 @@ test('upstream URL is copied and other value types are rejected', () => {
   result.pathname = '/changed';
   assert.equal(original.href, DEFAULT_UPSTREAM);
   for (const value of [null, 42, {}, '']) assert.throws(() => validateAgentRouterUpstream(value));
+});
+
+test('provider classification accepts only exact official HTTPS targets', () => {
+  for (const upstream of ['https://agentrouter.org/v1', 'https://AGENTROUTER.ORG/v1', 'https://ps.air-outer.com/v1']) {
+    assert.equal(isAgentRouterUpstream(upstream), true);
+    assert.equal(isAgentRouterUpstream(new URL(upstream)), true);
+  }
+  for (const upstream of ['http://127.0.0.1:1234/v1', 'https://localhost:1234/v1', 'http://[::1]:1234/v1']) {
+    assert.equal(isAgentRouterUpstream(upstream), false);
+  }
+  for (const upstream of ['http://agentrouter.org/v1', 'http://ps.air-outer.com/v1', 'https://api.example.com/v1',
+    'https://agentrouter.org.evil.example/v1', 'https://sub.agentrouter.org/v1', 'https://agentrouter.org./v1',
+    'http://127.0.0.1.evil.example/v1', 'http://192.168.1.1/v1', 'file:///tmp/mock',
+    'https://user:secret@agentrouter.org/v1', 'https://agentrouter.org/v1?key=secret', 'https://agentrouter.org/v1#fragment',
+    'not-a-url', undefined, null, {}, 1]) {
+    assert.equal(isAgentRouterUpstream(upstream), false);
+  }
 });
 
 test('valid client key rotation needs no bridge restart and retries freeze each request identity', async t => {
@@ -127,7 +148,7 @@ test('loopback manager does not gain the official-host generic400 signature thro
     calls.push(JSON.parse(Buffer.concat(chunks).toString()));
     res.setHeader('x-upstream-host', 'agentrouter.org');
     json(res, 400, error);
-  });
+  }, mockPort => ({ upstream: `http://127.0.0.1:${mockPort}/v1` }));
   const result = await post(port, 'MOCK_KEY', history);
   assert.equal(result.status, 400);
   assert.deepEqual(JSON.parse(result.body), error);

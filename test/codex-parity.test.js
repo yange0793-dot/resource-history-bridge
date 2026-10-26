@@ -171,7 +171,7 @@ function assertIdentity(requests, body) {
 test('scoped matcher accepts only the official hostname and exact observed plain HTTP400 shape', () => {
   const payload = freeze(scopedPayload());
   for (const host of officialHosts) {
-    for (const upstream of [`https://${host}/v1`, new URL(`https://${host}/v1`), `http://${host}/v1`]) {
+    for (const upstream of [`https://${host}/v1`, new URL(`https://${host}/v1`)]) {
       assert.equal(isScopedHistoryFailure(payload, 400, upstream), true);
     }
   }
@@ -204,6 +204,7 @@ for (const [name, payload, status, upstream] of [
   ['subdomain hostname', scopedPayload(), 400, 'https://sub.agentrouter.org/v1'],
   ['trailing-dot hostname', scopedPayload(), 400, 'https://agentrouter.org./v1'],
   ['credentials in URL', scopedPayload(), 400, 'https://synthetic:synthetic@ps.air-outer.com/v1'],
+  ['HTTP official hostname', scopedPayload(), 400, 'http://ps.air-outer.com/v1'],
   ['unsupported URL protocol', scopedPayload(), 400, 'ftp://ps.air-outer.com/v1'],
   ['missing upstream', scopedPayload(), 400, undefined],
   ['malformed upstream', scopedPayload(), 400, 'not-a-url']
@@ -450,13 +451,9 @@ for (const mode of ['codex', 'harness']) {
     ['malformed raw JSON', '{"error":broken', undefined, 400],
     ['partial data frame', `data: ${JSON.stringify(scopedPayload())}`, undefined, 400]
   ]) test(`${mode} strict scope barrier ${name} preserves exact response and request bytes`, async t => {
-    if (upstream) {
-      assert.throws(() => createBridge({ upstream, historyMode: mode }), TypeError);
-      return;
-    }
     const raw = Buffer.from(JSON.stringify(freeze(mixedHistory()), null, 2));
     const f = await fixture(t, (_req, res) => send(res, status, error), {
-      historyMode: mode, automaticRecovery: true, generic400Projection: false
+      ...(upstream ? { upstream } : {}), historyMode: mode, automaticRecovery: true, generic400Projection: false
     });
     const result = await post(f.address, raw);
     assert.equal(result.status, status);

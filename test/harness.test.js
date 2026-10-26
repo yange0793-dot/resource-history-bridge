@@ -5,6 +5,7 @@ const assert = require('node:assert/strict');
 const http = require('node:http');
 const { once } = require('node:events');
 const { createBridge } = require('..');
+const { mockAgentRouter } = require('../scripts/mock-agentrouter.cjs');
 
 const known = JSON.stringify({ error: { type: 'invalid_request_error', message: 'The requested item was created under a different Azure OpenAI resource.' } });
 const done = `event: response.completed\ndata: ${JSON.stringify({ type: 'response.completed', response: { status: 'completed', output: [{ type: 'message', role: 'assistant', content: [{ type: 'output_text', text: 'RESULT_42' }] }] } })}\n\n`;
@@ -30,7 +31,8 @@ async function fixture(t, respond, options = {}) {
   });
   upstream.listen(0, '127.0.0.1');
   await once(upstream, 'listening');
-  const bridge = createBridge({ upstream: `http://127.0.0.1:${upstream.address().port}/v1`, historyMode: 'harness', resourceAttempts: 3, retryDelayMs: 0, timeoutMs: 2000, ...options });
+  t.after(mockAgentRouter(upstream.address().port));
+  const bridge = createBridge({ upstream: 'https://agentrouter.org/v1', historyMode: 'harness', resourceAttempts: 3, retryDelayMs: 0, timeoutMs: 2000, ...options });
   const address = await bridge.listen(0);
   t.after(async () => { await bridge.close(); upstream.closeAllConnections(); await new Promise(resolve => upstream.close(resolve)); });
   return { address, requests };

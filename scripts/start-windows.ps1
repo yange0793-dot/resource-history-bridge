@@ -28,6 +28,6 @@ try {
     exit $exitCode
 }
 catch {
-    Write-Host 'Startup did not complete. Check Node.js >=18, RHB_CLIENT, the AgentRouter upstream, port and local execution permissions. No service or execution policy was changed.'
+    Write-Host 'Startup did not complete. Check Node.js >=18, RHB_CLIENT, the upstream URL, port and local execution permissions. No service or execution policy was changed.'
     exit 1
 }

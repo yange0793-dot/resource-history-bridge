@@ -16,7 +16,7 @@ const STARTUP_ERROR = 'resource-history-bridge could not start.';
 function cleanEnv(extra = {}) {
   const env = { ...process.env };
   for (const name of Object.keys(env)) if (/^RHB_/i.test(name)) delete env[name];
-  return { ...env, RHB_UPSTREAM: 'http://127.0.0.1:1/v1', ...extra };
+  return { ...env, RHB_UPSTREAM: 'https://agentrouter.org/v1', ...extra };
 }
 
 // A subprocess intercepts only the CLI's bridge dependency, not its env parser.
@@ -132,7 +132,7 @@ test('CLI defaults to the official AgentRouter URL without contacting it', () =>
   assert.equal(options.upstream, 'https://agentrouter.org/v1');
   assert.equal(options.historyMode, 'minimal');
   assert.equal(options.upstreamProtocol, 'passthrough');
-  assert.match(result.stdout, /AgentRouter upstream: https:\/\/agentrouter\.org\n/);
+  assert.match(result.stdout, /Upstream: https:\/\/agentrouter\.org\n/);
   assert.match(result.stdout, /Client: generic; history: minimal; protocol: passthrough; auth source: client/);
 });
 
@@ -157,11 +157,11 @@ test('CLI wires each client preset with final history-mode recovery defaults', (
   assert.equal(harness.generic400Projection, true);
 });
 
-test('CLI rejects unsupported remote upstreams and invalid clients before creating the bridge', () => {
+test('CLI rejects unsafe upstreams and invalid clients before creating the bridge', () => {
   for (const env of [
-    { RHB_UPSTREAM: 'https://api.example.com/v1' },
-    { RHB_UPSTREAM: 'http://agentrouter.org/v1' },
-    { RHB_UPSTREAM: 'https://agentrouter.org.evil.test/v1' },
+    { RHB_UPSTREAM: 'file:///tmp/mock' },
+    { RHB_UPSTREAM: 'https://agentrouter.org/v1?key=MOCK_URL_SECRET' },
+    { RHB_UPSTREAM: 'https://agentrouter.org/v1#MOCK_URL_SECRET' },
     { RHB_UPSTREAM: '' }, { RHB_CLIENT: '' }, { RHB_CLIENT: 'unknown' }
   ]) {
     const result = configuredResult(env);
@@ -170,6 +170,35 @@ test('CLI rejects unsupported remote upstreams and invalid clients before creati
     assert.equal(result.stdout, '');
     assert.ok(result.stderr.startsWith(STARTUP_ERROR));
     assert.doesNotMatch(result.stderr, /api\.example\.com|evil\.test|unknown/);
+  }
+});
+
+test('CLI accepts other fixed HTTP(S) hosts but reports recovery disabled and effective passthrough', () => {
+  for (const upstream of ['https://api.example.com/v1', 'http://agentrouter.org/v1', 'https://agentrouter.org.evil.test/v1']) {
+    const result = configuredResult({ RHB_UPSTREAM: upstream, RHB_CLIENT: 'claude-code' });
+    assert.ifError(result.error);
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(result.stderr, '');
+    assert.match(result.stdout, /AgentRouter recovery: disabled \(passthrough\)/);
+    assert.match(result.stdout, /Client: claude-code; history: minimal; protocol: passthrough; auth source: client/);
+    assert.equal(result.stdout.includes(`Upstream: ${new URL(upstream).origin}\n`), true);
+  }
+});
+
+test('CLI loopback is permanently passthrough for every client preset', () => {
+  for (const client of ['claude-code', 'codex', 'harness', 'generic']) {
+    const result = configuredResult({ RHB_UPSTREAM: 'http://127.0.0.1:1/v1', RHB_CLIENT: client });
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(result.stdout, /AgentRouter recovery: disabled \(passthrough\)/);
+    assert.match(result.stdout, /protocol: passthrough/);
+  }
+});
+
+test('CLI official HTTPS AgentRouter targets automatically enable recovery', () => {
+  for (const upstream of ['https://agentrouter.org/v1', 'https://ps.air-outer.com/v1']) {
+    const result = configuredResult({ RHB_UPSTREAM: upstream });
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(result.stdout, /AgentRouter recovery: enabled\n/);
   }
 });
 
@@ -294,9 +323,41 @@ test('CLI startup logs omit valid upstream paths and bridge credentials', { time
     RHB_CLIENT: 'claude-code', RHB_API_KEY: 'MOCK_ENV_SECRET', RHB_USER_AGENT: 'MOCK_HEADER_SECRET'
   });
   assert.equal(state.errors, '');
-  assert.match(state.output, /AgentRouter upstream: http:\/\/127\.0\.0\.1:1\n/);
-  assert.match(state.output, /Client: claude-code; history: minimal; protocol: responses; auth source: bridge override/);
+  assert.match(state.output, /Upstream: http:\/\/127\.0\.0\.1:1\n/);
+  assert.match(state.output, /Client: claude-code; history: minimal; protocol: passthrough; auth source: bridge override/);
   assert.doesNotMatch(state.output, /MOCK_PATH_SECRET|MOCK_ENV_SECRET|MOCK_HEADER_SECRET/);
+  child.kill('SIGTERM');
+  await closed;
+  await assertListenerClosed(port);
+});
+
+test('CLI loopback is raw passthrough despite Harness portable history and Azure400', { timeout: 15000 }, async t => {
+  const requests = [];
+  const error = '{"error":{"type":"invalid_request_error","message":"The requested item was created under a different Azure OpenAI resource."}}';
+  const upstream = http.createServer(async (req, res) => {
+    const chunks = [];
+    for await (const chunk of req) chunks.push(chunk);
+    requests.push({ bytes: Buffer.concat(chunks), url: req.url, authorization: req.headers.authorization });
+    res.writeHead(400, { 'content-type': 'application/json' });
+    res.end(error);
+  });
+  upstream.listen(0, '127.0.0.1');
+  await once(upstream, 'listening');
+  t.after(async () => { upstream.closeAllConnections(); await new Promise(resolve => upstream.close(resolve)); });
+  const port = await unusedPort();
+  const { child, closed, state } = await startCli(t, {
+    RHB_UPSTREAM: `http://127.0.0.1:${upstream.address().port}/v1`, RHB_PORT: String(port),
+    RHB_CLIENT: 'harness', RHB_HISTORY_STRATEGY: 'portable',
+    RHB_UPSTREAM_PROTOCOL: 'responses', RHB_RETRY_DELAY_MS: '0'
+  });
+  const body = { model: 'OTHER_MODEL', previous_response_id: 'OTHER_SERVER_REFERENCE', input: [
+    { type: 'reasoning', id: 'OTHER_RESOURCE_ID', encrypted_content: 'OTHER_OPAQUE_BYTES', summary: [] }
+  ] };
+  assert.deepEqual(await post(port, body), { status: 400, body: error });
+  assert.deepEqual(requests, [{ bytes: Buffer.from(JSON.stringify(body)), url: '/v1/responses', authorization: 'Bearer MOCK_CLIENT_SECRET' }]);
+  assert.match(state.output, /AgentRouter recovery: disabled \(passthrough\)/);
+  assert.match(state.output, /Client: harness; history: harness; protocol: passthrough; auth source: client/);
+  assert.equal(state.errors, '');
   child.kill('SIGTERM');
   await closed;
   await assertListenerClosed(port);

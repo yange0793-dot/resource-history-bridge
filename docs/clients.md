@@ -1,6 +1,6 @@
 # 客户端接入
 
-桥面向同一台电脑上的 Codex、DeepSeek Harness、Claude Code 或其他 API 客户端，固定连接 AgentRouter。需要 Node.js ≥18；不安装后台服务、不读取配置管理工具、不自动改客户端设置。
+桥面向同一台电脑上的 Codex、DeepSeek Harness、Claude Code 或其他 API 客户端，固定连接配置的上游，仅对 AgentRouter 启用恢复。其他供应商正常透传，不因为供应商不同而拒绝启动。需要 Node.js ≥18；不安装后台服务、不读取配置管理工具、不自动改客户端设置。
 
 ## 1. 启动桥
 
@@ -52,9 +52,11 @@ $env:RHB_UPSTREAM = 'https://ps.air-outer.com/v1'
 node .\cli.js
 ```
 
-上游填 Base URL，不是完整 `/responses` 路径。不能包含用户名、密码、query 或 fragment。运行时拒绝其他远程主机及官方域名的 HTTP 地址；仅为已有本机代理或测试保留固定 loopback 上游。默认端口 `8790`，有冲突时设置 `RHB_PORT` 并同步修改客户端地址。
+上游填 Base URL，不是完整 `/responses` 路径。不能包含用户名、密码、query 或 fragment。按固定目标 URL 自动识别两个 HTTPS 官方主机并启用恢复；其他 HTTP(S) 主机及本机代理仅透传，不需要额外声明或开关，不因为供应商不同而报错。生产使用 HTTPS。默认端口 `8790`，有冲突时设置 `RHB_PORT` 并同步修改客户端地址。
 
-桥在前台运行。启动信息显示脱敏上游、实际历史/协议模式、认证来源和监听地址；不显示 key。确认监听成功后再连接客户端，按 `Ctrl+C` 停止。启动失败不代表桥已运行。
+例如设置 `RHB_UPSTREAM=https://api.example.com/v1` 后，桥仍正常启动，但不会删除历史 ID、恢复重试或转换 Messages。这里是占位地址，应改为自己的实际上游；非 AgentRouter 时，客户端与上游须使用同一协议。
+
+桥在前台运行。启动信息显示脱敏上游、`AgentRouter recovery: enabled` 或 `disabled (passthrough)`、历史预设、实际协议、认证来源和监听地址；不显示 key。非 AgentRouter 目标即使选择 `claude-code` 预设，也显示实际 `protocol: passthrough`。确认监听成功后再连接客户端，按 `Ctrl+C` 停止。启动失败不代表桥已运行。
 
 ## 2. 配置客户端地址
 
@@ -119,7 +121,7 @@ $env:ANTHROPIC_BASE_URL = 'http://127.0.0.1:8790'
 
 Harness 模式适配 PiAiAdapter 的原生历史，不修改持久 replayState、签名或 backfill；恢复只在请求副本上进行。原生 `/responses` 另有共享预算的瞬时错误与明确空终态恢复，耗尽后仍返回实际最后响应，客户端仍可能报告原生 `EMPTY_RESPONSE`。其他客户端空完成策略不因此改变。见 [Harness 契约](scope.md#harness-历史投影契约)。
 
-原生 DeepSeek API / `openai-completions` 不是 Responses。本桥不是 DeepSeek 直连代理，不支持其他供应商的接入或恢复；Chat Completions 只有原协议转发能力。
+原生 DeepSeek API / `openai-completions` 不是 Responses。配置为其他供应商时本桥只做原协议透传，不启用 AgentRouter 的历史投影或连续恢复；Chat Completions 只有原协议转发能力。
 
 ### CCSwitch、Magpie 与其他配置管理工具
 
@@ -150,13 +152,13 @@ Harness 模式适配 PiAiAdapter 的原生历史，不修改持久 replayState�
 
 ## 已有本机代理
 
-可把 `RHB_UPSTREAM` 固定为已有 loopback 代理的 Base URL；它应继续连接 AgentRouter。客户端不能在请求 URL 或正文中选择上游。
+可把 `RHB_UPSTREAM` 固定为已有 loopback 代理的 Base URL，此时只做原协议透传。客户端不能在请求 URL 或正文中选择上游。
 
-直接配置官方主机才启用 [严格 AgentRouter 400 历史包装](scope.md#严格-agentrouter-历史错误) 规则。本机代理应原样传回可识别的 Azure 跨资源错误，或由它集成恢复；即使代理最终连接官方入口，桥也不会凭客户端/代理 header 信任泛化 400。Harness 自有的受限泛化 400 候选仍按 Harness 契约处理，不能当作官方主机验证。
+只有实际发往两个 HTTPS 官方主机的请求才启用恢复，包括 [严格 AgentRouter 400 历史包装](scope.md#严格-agentrouter-历史错误)。即使本机代理最终连接官方入口，桥也不会凭客户端/代理 header 或错误内容猜测其身份；不启用投影、Harness 连续恢复或 Messages 转换。需要代理链内恢复时，应由能识别实际出站目标的代理实现。
 
 ## 停止与安全
 
-- 停止桥后，连接它的客户端不能继续请求；需要直连时，在原配置来源改回官方 Base URL。
+- 停止桥后，连接它的客户端不能继续请求；需要直连时，在原配置来源改回实际上游的 Base URL。
 - 只支持同机桌面应用、CLI 或 SDK，不支持网页 CORS。
 - 单机单用户、无独立多用户鉴权；不能防止同机恶意进程消耗统一 key。不要公开端口、远程转发或共享。
 - 请求历史和加密 reasoning 会发送给固定上游；协议转换不是隐私保证。

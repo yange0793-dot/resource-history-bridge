@@ -11,6 +11,8 @@ import { pathToFileURL } from 'node:url';
 
 const require = createRequire(import.meta.url);
 const { createBridge } = require('../index.js');
+const { mockAgentRouter } = require('./mock-agentrouter.cjs');
+let restoreTransport;
 const modules = process.env.RHB_HARNESS_MODULES || '/Applications/DeepSeek Harness.app/Contents/Resources/app/dsh/node_modules';
 const provider = 'ag';
 const model = 'gpt-6.1-sol';
@@ -263,7 +265,8 @@ async function main() {
   });
   upstream.on('connection', socket => { sockets.add(socket); socket.once('close', () => sockets.delete(socket)); });
   await new Promise((resolve, reject) => { upstream.once('error', reject); upstream.listen(0, '127.0.0.1', resolve); });
-  bridge = createBridge({ upstream: `http://127.0.0.1:${upstream.address().port}/v1`, historyMode: 'harness', resourceAttempts: 3, retryDelayMs: 0, timeoutMs: 10000 });
+  restoreTransport = mockAgentRouter(upstream.address().port);
+  bridge = createBridge({ upstream: 'https://agentrouter.org/v1', historyMode: 'harness', resourceAttempts: 3, retryDelayMs: 0, timeoutMs: 10000 });
   const address = await bridge.listen(0);
   const bridgeBase = `http://127.0.0.1:${address.port}/v1`;
   nativeFetch = globalThis.fetch;
@@ -360,6 +363,7 @@ try {
 } finally {
   if (nativeFetch) globalThis.fetch = nativeFetch;
   if (bridge) await bridge.close().catch(error => summary.failures.push({ source: 'bridge-cleanup', message: errorMessage(error) }));
+  restoreTransport?.();
   const socketClosures = [...sockets].map(socket => new Promise(resolve => socket.once('close', resolve)));
   for (const socket of sockets) socket.destroy();
   if (upstream) await new Promise(resolve => upstream.close(resolve));

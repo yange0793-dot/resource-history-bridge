@@ -5,6 +5,7 @@ const assert = require('node:assert/strict');
 const http = require('node:http');
 const { once } = require('node:events');
 const { createBridge } = require('..');
+const { mockAgentRouter } = require('../scripts/mock-agentrouter.cjs');
 
 const frame = (type, data = {}) => `event: ${type}\ndata: ${JSON.stringify({ type, ...data })}\n\n`;
 const empty = frame('response.created', { response: { id: 'resp-mock', status: 'in_progress', output: [] } })
@@ -25,7 +26,8 @@ async function fixture(t, handler, options = {}) {
   upstream.on('connection', socket => { sockets.add(socket); socket.once('close', () => sockets.delete(socket)); });
   upstream.listen(0, '127.0.0.1');
   await once(upstream, 'listening');
-  const bridge = createBridge({ upstream: `http://127.0.0.1:${upstream.address().port}/v1`, timeoutMs: 1000, resourceAttempts: 2, retryDelayMs: 0, ...options });
+  t.after(mockAgentRouter(upstream.address().port));
+  const bridge = createBridge({ upstream: 'https://agentrouter.org/v1', timeoutMs: 1000, resourceAttempts: 2, retryDelayMs: 0, ...options });
   const address = await bridge.listen(0);
   t.after(async () => {
     await bridge.close();

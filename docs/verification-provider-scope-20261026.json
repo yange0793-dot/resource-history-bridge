@@ -1,0 +1,71 @@
+{
+  "date": "2026-10-26",
+  "baseRevision": "5ed9ba0a56990940d32da1043d029ca3dfaa7666",
+  "scope": "Automatically activate AgentRouter recovery only for exact official HTTPS request targets; other fixed HTTP(S) targets pass through without provider rejection or declarations.",
+  "activation": {
+    "officialHosts": ["agentrouter.org", "ps.air-outer.com"],
+    "protocol": "https",
+    "extraDeclarationOrSwitch": false,
+    "loopbackTargets": "passthrough",
+    "requestHeadersOrErrorTextCanEnable": false,
+    "otherTargetsAccepted": true
+  },
+  "passthrough": {
+    "singleUpstreamCall": true,
+    "historyProjection": false,
+    "resourceTransientEmptyRetries": false,
+    "messagesConversion": false,
+    "preservesRawRequestAndResponseBytes": true,
+    "preservesContentEncodingAndAcceptEncoding": true,
+    "preservesMessagesBetaQueryAndNativeAuth": true,
+    "preservesActualUpstreamErrors": true,
+    "loopbackListenerAndFixedTargetGuardsRetained": true
+  },
+  "runtimeHashes": {
+    "cli.js": "0ca7b8b9a5cc5d71fdccb9cb9400437d36f0a17c3cd3486268376f00581d0d52",
+    "lib/agentrouter.js": "61fb2002dab7b36bdfccffe37806a9d60243b637a59f5cb2721059a72f8271c0",
+    "lib/bridge.js": "b7f91e41a90743ed687d3c8d401dd3000f31a42b0fd59e45af1a74ec6809631c",
+    "lib/recovery.js": "faafd4e81396584aa2eed7a8fe3fb4750a336625c5c9e8b30db29a46eee9ab36"
+  },
+  "localMacOS": [
+    {"node": "18.20.8", "tests": 946, "pass": 946, "fail": 0, "skip": 0, "cancelled": 0},
+    {"node": "22.23.3", "tests": 946, "pass": 946, "fail": 0, "skip": 0, "cancelled": 0},
+    {"node": "24.18.0", "tests": 946, "pass": 946, "fail": 0, "skip": 0, "cancelled": 0}
+  ],
+  "affectedTestFollowup": {
+    "reason": "Restored the original exact AgentRouter generic400 signature plus spoofed-host combination on a loopback target after the full matrix; runtime unchanged.",
+    "file": "test/agentrouter.test.js",
+    "nodes": ["18.20.8", "22.23.3", "24.18.0"],
+    "testsPerNode": 29,
+    "passPerNode": 29,
+    "fail": 0
+  },
+  "installedCodexLoopback": {
+    "client": "Codex 0.164.0",
+    "historyItems": 152,
+    "faults": [
+      {"kind": "azureWrapper", "exit": 0, "requests": 2, "turnCompleted": true, "exactProjection": true},
+      {"kind": "scoped400", "exit": 0, "requests": 2, "turnCompleted": true, "exactProjection": true}
+    ],
+    "originalHistoryUnchanged": true,
+    "realUpstream": false
+  },
+  "installedHarnessLoopback": [
+    {"probe": "parity", "checks": 71, "pass": true, "listenersAndSocketsClosed": true},
+    {"probe": "full", "checks": 91, "pass": true, "listenersAndSocketsClosed": true}
+  ],
+  "testTransport": "Official configured URLs are mapped to loopback by a test-only helper before DNS; no production declaration or network credentials.",
+  "ci": {"status": "not run for this revision", "priorCIIsNotThisRevision": true},
+  "delivery": {
+    "committed": false,
+    "pushed": false,
+    "clientConfigurationsChanged": false,
+    "existingServicesRestarted": false,
+    "localPluginRedeployed": false
+  },
+  "notVerified": [
+    "Windows/macOS/Linux CI for this revision",
+    "Natural live-upstream fault recovery after this change",
+    "All history types, management-tool versions or long-running sustained workloads"
+  ]
+}

@@ -2,7 +2,7 @@
 'use strict';
 
 const { createBridge } = require('./index');
-const { validateAgentRouterUpstream } = require('./lib/agentrouter');
+const { validateAgentRouterUpstream, isAgentRouterUpstream } = require('./lib/agentrouter');
 const { resolveClientConfig } = require('./lib/client-config');
 
 function numberFromEnv(name, fallback) {
@@ -37,6 +37,7 @@ function diagnosticsFromEnv() {
 async function main() {
   if (process.argv.length !== 2) throw new Error('No command-line arguments are accepted. Configure with environment variables.');
   const upstream = validateAgentRouterUpstream(process.env.RHB_UPSTREAM);
+  const agentRouterRecovery = isAgentRouterUpstream(upstream);
   const { client, historyMode, upstreamProtocol } = resolveClientConfig(process.env);
   const port = numberFromEnv('RHB_PORT', 8790);
   if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error('RHB_PORT must be between 1 and 65535.');
@@ -68,7 +69,8 @@ async function main() {
   const address = await bridge.listen(port);
   const host = address.family === 'IPv6' ? `[${address.address}]` : address.address;
   const authSource = process.env.RHB_API_KEY === undefined ? 'client' : 'bridge override';
-  process.stdout.write(`AgentRouter upstream: ${upstream.origin}\nClient: ${client}; history: ${historyMode}; protocol: ${upstreamProtocol}; auth source: ${authSource}\nresource-history-bridge listening at http://${host}:${address.port}/v1\n`);
+  const effectiveProtocol = agentRouterRecovery ? upstreamProtocol : 'passthrough';
+  process.stdout.write(`Upstream: ${upstream.origin}\nAgentRouter recovery: ${agentRouterRecovery ? 'enabled' : 'disabled (passthrough)'}\nClient: ${client}; history: ${historyMode}; protocol: ${effectiveProtocol}; auth source: ${authSource}\nresource-history-bridge listening at http://${host}:${address.port}/v1\n`);
   let closing = false;
   const stop = async () => {
     if (closing) return;
@@ -81,6 +83,6 @@ async function main() {
 
 main().catch(() => {
   // Do not echo exception strings: an invalid URL could contain credentials.
-  process.stderr.write('resource-history-bridge could not start. Check RHB_CLIENT, the AgentRouter RHB_UPSTREAM, history/protocol overrides, loopback host, port, limits and key header; no arguments are accepted.\n');
+  process.stderr.write('resource-history-bridge could not start. Check RHB_CLIENT, RHB_UPSTREAM, history/protocol overrides, loopback host, port, limits and key header; no arguments are accepted.\n');
   process.exitCode = 1;
 });

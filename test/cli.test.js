@@ -36,8 +36,8 @@ test('CLI starts via env, relays mock request and SIGTERM closes listener', asyn
   await once(upstream, 'listening');
   t.after(() => new Promise(resolve => upstream.close(resolve)));
   const port = await unusedPort();
-  const child = spawn(process.execPath, [cli], {
-    env: cleanEnv({ RHB_UPSTREAM: `http://127.0.0.1:${upstream.address().port}/v1`, RHB_PORT: String(port), RHB_API_KEY: 'MOCK_CLI_KEY', RHB_HISTORY_MODE: 'harness' }),
+  const child = spawn(process.execPath, ['--require', path.join(__dirname, '..', 'scripts', 'mock-agentrouter.cjs'), cli], {
+    env: cleanEnv({ RHB_UPSTREAM: 'https://agentrouter.org/v1', RHB_TEST_MOCK_PORT: String(upstream.address().port), RHB_PORT: String(port), RHB_API_KEY: 'MOCK_CLI_KEY', RHB_HISTORY_MODE: 'harness' }),
     stdio: ['ignore', 'pipe', 'pipe']
   });
   t.after(() => { if (child.exitCode === null) child.kill('SIGKILL'); });
@@ -72,8 +72,9 @@ test('CLI starts via env, relays mock request and SIGTERM closes listener', asyn
   assert.equal(child.exitCode !== null || child.signalCode !== null, true);
   assert.equal(errors, '');
   assert.equal(output.includes('MOCK_CLI_KEY'), false);
-  assert.match(output, new RegExp(`AgentRouter upstream: http://127\\.0\\.0\\.1:${upstream.address().port}\\n`));
+  assert.match(output, /Upstream: https:\/\/agentrouter\.org\n/);
   assert.match(output, /Client: generic; history: harness; protocol: passthrough; auth source: bridge override/);
+  assert.match(output, /AgentRouter recovery: enabled\n/);
   await assert.rejects(new Promise((resolve, reject) => {
     const socket = net.connect(port, '127.0.0.1');
     socket.on('connect', () => { socket.destroy(); resolve(); });

@@ -5,6 +5,7 @@ const assert = require('node:assert/strict');
 const http = require('node:http');
 const { once } = require('node:events');
 const { createBridge } = require('../lib/bridge');
+const { mockAgentRouter } = require('../scripts/mock-agentrouter.cjs');
 
 const frame = payload => `data: ${JSON.stringify(payload)}\n\n`;
 const lifecycle = frame({ type: 'response.created', response: { status: 'in_progress', output: [] } });
@@ -27,8 +28,9 @@ async function fixture(t, handler, options = {}) {
   upstream.on('connection', socket => { sockets.add(socket); socket.once('close', () => sockets.delete(socket)); });
   upstream.listen(0, '127.0.0.1');
   await once(upstream, 'listening');
+  t.after(mockAgentRouter(upstream.address().port));
   const bridge = createBridge({
-    upstream: `http://127.0.0.1:${upstream.address().port}/v1`, historyMode: 'harness',
+    upstream: 'https://agentrouter.org/v1', historyMode: 'harness',
     timeoutMs: 2000, retryDelayMs: 0, retryJitterRatio: 0, ...options
   });
   const address = await bridge.listen(0);

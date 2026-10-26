@@ -203,7 +203,7 @@ for (const [choice, historyMode, upstreamProtocol] of [
     const port = await unusedPort();
     const client = choice || 'codex';
     const { child, closed, state } = await startLauncher(t, {
-      RHB_UPSTREAM: 'http://127.0.0.1:1/v1', RHB_PORT: String(port)
+      RHB_UPSTREAM: 'https://agentrouter.org/v1', RHB_PORT: String(port)
     }, `${choice}\n`);
     assert.match(state.output, /codex \/ harness \/ claude-code \/ generic \[codex\]/);
     assert.match(state.output, new RegExp(`Client: ${client}; history: ${historyMode}; protocol: ${upstreamProtocol}; auth source: client`));
@@ -218,11 +218,11 @@ for (const [choice, historyMode, upstreamProtocol] of [
 test('launcher preserves preset overrides and advanced env without prompting', { timeout: 45000 }, async t => {
   const port = await unusedPort();
   const { child, closed, state } = await startLauncher(t, {
-    RHB_UPSTREAM: 'http://127.0.0.1:1/preserved-base', RHB_PORT: String(port),
+    RHB_UPSTREAM: 'https://agentrouter.org/preserved-base', RHB_PORT: String(port),
     RHB_CLIENT: 'harness', RHB_HISTORY_MODE: 'minimal', RHB_UPSTREAM_PROTOCOL: 'responses',
     RHB_RETRY_DELAY_MS: '5000', RHB_GENERIC_400_PROJECTION: 'false'
   });
-  assert.match(state.output, /AgentRouter upstream: http:\/\/127\.0\.0\.1:1\n/);
+  assert.match(state.output, /Upstream: https:\/\/agentrouter\.org\n/);
   assert.doesNotMatch(state.output, /preserved-base/);
   assert.match(state.output, /Client: harness; history: minimal; protocol: responses; auth source: client/);
   assert.doesNotMatch(state.output, /\[codex\]/);
@@ -232,14 +232,13 @@ test('launcher preserves preset overrides and advanced env without prompting', {
   await listenerClosed(port);
 });
 
-test('launcher rejects invalid selection and remote upstream without logging secrets', { timeout: 15000 }, () => {
+test('launcher rejects invalid selection and unsafe upstream without logging secrets', { timeout: 15000 }, () => {
   const shell = windows ? powershell() : 'bash';
   assert.ok(shell, 'Windows verification requires PowerShell');
   const script = path.join(root, 'scripts', windows ? 'start-windows.ps1' : 'start-macos.command');
   for (const [extra, input] of [
     [{ RHB_CLIENT: 'unknown', RHB_UPSTREAM: 'http://127.0.0.1:1/v1' }, undefined],
     [{ RHB_CLIENT: 'generic', RHB_UPSTREAM: 'https://MOCK_USER:MOCK_URL_SECRET@agentrouter.org/v1' }, undefined],
-    [{ RHB_CLIENT: 'generic', RHB_UPSTREAM: 'https://api.example.com/v1' }, undefined],
     [{ RHB_UPSTREAM: 'http://127.0.0.1:1/v1' }, 'unknown\n']
   ]) {
     const args = windows ? ['-NoProfile', ...(input === undefined ? ['-NonInteractive'] : []), '-File', script] : [script];
@@ -254,10 +253,24 @@ test('launcher rejects invalid selection and remote upstream without logging sec
   }
 });
 
+test('launcher accepts remote fixed upstream in disabled passthrough mode without contacting it', { timeout: 45000 }, async t => {
+  const port = await unusedPort();
+  const { child, closed, state } = await startLauncher(t, {
+    RHB_CLIENT: 'claude-code', RHB_UPSTREAM: 'https://api.example.com/v1', RHB_PORT: String(port)
+  });
+  assert.match(state.output, /Upstream: https:\/\/api\.example\.com\n/);
+  assert.match(state.output, /AgentRouter recovery: disabled \(passthrough\)/);
+  assert.match(state.output, /Client: claude-code; history: minimal; protocol: passthrough; auth source: client/);
+  assert.equal(state.errors, '');
+  await killTree(child, 'SIGTERM');
+  await closed;
+  await listenerClosed(port);
+});
+
 test('launcher without upstream env uses AgentRouter default without contacting it', { timeout: 45000 }, async t => {
   const port = await unusedPort();
   const { child, closed, state } = await startLauncher(t, { RHB_CLIENT: 'claude-code', RHB_PORT: String(port) });
-  assert.match(state.output, /AgentRouter upstream: https:\/\/agentrouter\.org\n/);
+  assert.match(state.output, /Upstream: https:\/\/agentrouter\.org\n/);
   assert.match(state.output, /Client: claude-code; history: minimal; protocol: responses; auth source: client/);
   assert.doesNotMatch(state.output, /\[codex\]/);
   assert.equal(state.errors, '');
@@ -295,7 +308,7 @@ test(`launcher converts Messages and recovers native Responses resource errors i
   const port = await unusedPort();
   const script = path.join(root, 'scripts', windows ? 'start-windows.ps1' : 'start-macos.command');
   const child = spawn(shell, windows ? ['-NoProfile', '-NonInteractive', '-File', script] : [script], {
-    cwd, env: { ...startupEnv(), RHB_UPSTREAM: `http://127.0.0.1:${upstream.address().port}/v1`, RHB_PORT: String(port), RHB_UPSTREAM_PROTOCOL: 'responses', RHB_HISTORY_MODE: historyMode, RHB_RETRY_DELAY_MS: '0', RHB_RESOURCE_ATTEMPTS: '3' },
+    cwd, env: { ...startupEnv(), NODE_OPTIONS: `--require="${path.join(root, 'scripts', 'mock-agentrouter.cjs')}"`, RHB_TEST_MOCK_PORT: String(upstream.address().port), RHB_UPSTREAM: 'https://agentrouter.org/v1', RHB_PORT: String(port), RHB_UPSTREAM_PROTOCOL: 'responses', RHB_HISTORY_MODE: historyMode, RHB_RETRY_DELAY_MS: '0', RHB_RESOURCE_ATTEMPTS: '3' },
     stdio: ['ignore', 'pipe', 'pipe']
   });
   const closed = once(child, 'close');
