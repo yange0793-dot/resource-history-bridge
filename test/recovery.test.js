@@ -177,6 +177,38 @@ test('unknown response metadata/opaque content conservatively blocks replay', ()
   }
 });
 
+// The transport status is what the upstream actually sent; an unrecognized
+// error body only explains why this bridge could not read it. A deterministic
+// HTTP terminal status therefore keeps its real reason without ever retrying.
+for (const [name, failure, reason] of [
+  ['401 login required', { status: 401, payload: { error: { message: 'Invalid token', code: 'token_invalid' }, success: false } }, 'authentication'],
+  ['401 with an opaque body', { status: 401, payload: { msg: 'opaque', extra: 7 } }, 'authentication'],
+  ['402 opaque billing body', { status: 402, payload: { future_billing: true } }, 'billing_quota'],
+  ['403 with an opaque body', { status: 403, payload: { msg: 'opaque' } }, 'permission']
+]) test(`classify: ${name} keeps its real terminal reason over unknown body bytes`, () => {
+  const result = decide({ ...failure, unknownOutput: true });
+  assert.equal(result.classification, 'terminal');
+  assert.equal(result.reason, reason);
+  assert.equal(result.retry, false);
+  assert.equal(result.projectHistory, false);
+  assert.equal(result.projectEncryptedReasoning, false);
+  assert.equal(result.projectionCandidate, null);
+  assert.equal(result.nextState.attempt, 1);
+});
+
+test('output and commit proof keep priority over a deterministic HTTP status', () => {
+  const opaque = { error: { message: 'Invalid token' }, success: false };
+  assert.equal(decide({ status: 401, payload: opaque, outputStarted: true }).reason, 'output_started');
+  assert.equal(decide({ status: 403, payload: opaque, output: { hasOutput: true } }).reason, 'output_started');
+  assert.equal(decide({ status: 402, payload: opaque, committed: true }).reason, 'downstream_committed');
+  assert.equal(decide({ status: 401, payload: opaque, output: { committed: true } }).reason, 'downstream_committed');
+  // The unknown bytes stay the reason when the status alone is not terminal.
+  assert.equal(decide({ status: 500, payload: opaque, unknownOutput: true }).reason, 'unknown_output');
+  assert.equal(decide({ status: 400, payload: opaque, unknownOutput: true }).reason, 'unknown_output');
+  assert.equal(decide({ status: 404, payload: opaque, unknownOutput: true }).reason, 'unknown_output');
+  assert.equal(decide({ payload: opaque, unknownOutput: true }).reason, 'unknown_output');
+});
+
 test('explicit output, unknown bytes and downstream commit guards win over resource proof', () => {
   for (const flags of [
     { outputStarted: true }, { hasOutput: true }, { toolStarted: true },
@@ -306,6 +338,28 @@ test('Retry-After parses seconds, fractional seconds, millisecond hints, dates a
   assert.equal(parseRetryAfter({ 'retry-after': '2', 'x-ms-retry-after-ms': '3500' }, now), 3500);
   assert.equal(parseRetryAfter({ 'retry-after': ['1', 'Sun, 25 Oct 2026 03:00:04 GMT'], 'x-ms-retry-after-ms': ['1000', '5000'] }, now), 5000);
   assert.equal(parseRetryAfter(new Headers({ 'Retry-After': '2' }), now), 2000);
+});
+
+test('asctime Retry-After is read as GMT, not as the machine local zone', () => {
+  const now = Date.parse('Sun, 25 Oct 2026 03:00:00 GMT');
+  const asctime = 'Sun Oct 25 03:00:04 2026';
+  assert.equal(parseRetryAfter({ 'retry-after': asctime }, now), 4000);
+  const original = process.env.TZ;
+  try {
+    process.env.TZ = 'Asia/Shanghai';
+    // Date.parse reads a zone-less asctime string in local time. Only a host
+    // that actually switched zones can show the difference; Windows builds
+    // that ignore a runtime TZ keep the check above.
+    if (Date.parse(asctime) === now + 4000) return;
+    for (const value of [asctime, 'Sun Oct 25 03:00:04 2026 GMT']) {
+      assert.equal(parseRetryAfter({ 'retry-after': value }, now), 4000, value);
+    }
+    assert.equal(parseRetryAfter({ 'retry-after': 'Sunday, 25-Oct-26 03:00:04 GMT' }, now), 4000);
+    assert.equal(parseRetryAfter({ 'retry-after': 'Sun, 25 Oct 2026 03:00:04 GMT' }, now), 4000);
+  } finally {
+    if (original === undefined) delete process.env.TZ;
+    else process.env.TZ = original;
+  }
 });
 
 test('Retry-After rejects invalid, negative, infinite and non-HTTP-date values', () => {

@@ -1,8 +1,8 @@
 # DeepSeek Harness 自动续跑插件
 
-透明恢复只管**同一条请求**在输出前的可恢复故障；原生重试耗尽、turn 已经以错误终结之后，要让任务自己接着跑，就得在同一个 session 里再发一个 turn。本文说明这件事在**已安装的 Harness（0.2.1-rc.1）**上怎么做、哪些接口是真的、哪些缺口补不了。
+透明恢复只管**同一条请求**在输出前的可恢复故障；原生重试耗尽、turn 已经以错误终结之后，要让任务自己接着跑，就得在同一个 session 里再发一个 turn。本文接口于 2026-11-07 在**本机安装的 Harness（0.2.1-rc.4）**中核对。
 
-宿主适配器本体在 `lib/harness-host.js`，策略内核仍是 `lib/client-continuation.js` 的 `createHarnessTurnContinuation`。本文只讲插件外壳、安装与边界。
+宿主适配器本体在 `lib/harness-host.js`，策略内核仍是 `lib/client-continuation.js` 的 `createHarnessTurnContinuation`。插件入口是 [`plugins/harness-auto-continue.mjs`](../plugins/harness-auto-continue.mjs)，使用相对路径加载仓库内的宿主模块，无需复制代码或修改源码里的绝对路径。
 
 ## 结论先说
 
@@ -38,44 +38,17 @@
 
 ## 安装
 
-两步：**放一个插件文件**，**在 profile 的用户 patch 里插一行**。不改安装目录，不动 `package.json`，不需要 `pnpm add`（`insert` 行的 `name` 允许绝对路径，patch 载入时会转成 file URL）。
+保留完整仓库，在目标 profile 的用户 patch 中引用插件入口。不改应用安装目录，不需要安装 npm 依赖。
 
-### 1. 放插件文件
+### 1. 取得插件路径
 
-存到 `~/.dsh/plugins/harness-auto-continue/index.js`，内容如下（`REPO` 常量改成你自己的检出目录）：
+在仓库根目录运行：
 
-```js
-/**
- * harness-auto-continue — turn 因可恢复错误终结后，在同一 session 自动续跑。
- *
- * 只经由已安装 Harness 的原生接口工作：ctx.agents.get / agent.followup /
- * agent.session.snapshotEvents / ctx.sessions.flush / session/event 等。
- * 不做键盘注入、不改用户配置、不重放原 prompt。
- */
-import { createRequire } from 'node:module';
-
-const REPO = '/Users/tufu/Documents/zcode/resource-history-bridge';
-const require = createRequire(import.meta.url);
-const { createHarnessHost } = require(`${REPO}/lib/harness-host.js`);
-
-export const name = 'harness-auto-continue';
-export const inject = ['agents', 'sessions'];
-
-export function apply(ctx) {
-  const host = createHarnessHost({
-    ctx,
-    // 真的自动发：turn 以 error 终结、且快照证明可以安全续跑时才动手。
-    autoContinue: true,
-    // 每个 session 最多自动跑几轮续跑流程；一次流程内部再受内核约束（≤3 次续跑、180 秒）。
-    maxAutoRuns: 3,
-    logger: ctx.logger
-  });
-  ctx.effect(() => () => host.dispose(), 'harness-auto-continue: dispose host');
-  ctx.logger?.info?.('harness-auto-continue: enabled (same-session continuation, max 3 runs)');
-}
-
-export default { name, inject, apply };
+```sh
+node -p "require('node:path').resolve('plugins/harness-auto-continue.mjs')"
 ```
+
+将输出的绝对路径填到下一步的 `name`。插件依赖同仓库的 `lib`，不要单独移动这个文件。
 
 ### 2. 插入 profile patch
 
@@ -84,25 +57,24 @@ export default { name, inject, apply };
 ```yaml
 - insert:
     - id: harness-auto-continue
-      name: "/Users/tufu/.dsh/plugins/harness-auto-continue/index.js"
+      name: "/absolute/path/to/resource-history-bridge/plugins/harness-auto-continue.mjs"
       inject: [ agents, sessions ]
 ```
 
 - 这一行是**可选条目**：加载失败只会打一条警告，不会让应用起不来（app-boot 的启动矩阵对 optional entry 是 "warn; continue"）。
-- 用户级的 `~/.dsh/cordis.patch.yml` 优先级高于 profile 层，但它对**所有** profile 生效，而插件是按 profile 路径安装的；所以放在 desktop profile 里，别放全局层。
+- 用户级的 `~/.dsh/cordis.patch.yml` 对**所有** profile 生效；只在 desktop 使用时放在 desktop profile 中。
 - 其他 profile（例如 `headless`）要用，就在那个 profile 的 patch 里加同样一行。
 
 ### 3. 生效
 
 - 安装自带的 `@deepseek-ai/dsh-hmr` 在 profile 启动时会监视 profile 清单和两层用户 patch；改完 patch 通常**热生效**。
 - 不确定时**重启应用**最稳（HMR 只在 HMR 条启用、patch 可解析时才重载）。
-- 验证是否挂上：应用日志里有 `harness-auto-continue: enabled`；或者改坏 patch 里的路径，重启后应看到一条"可选条目加载失败"的警告而不是启动失败。桌面端是 Electron 应用，`--dump-config` 是 `dsh` 启动器（app-boot）的能力，不是这里必用的检查手段。
+- 验证是否挂上：应用日志里有 `harness-auto-continue: enabled`。桌面端是 Electron 应用，`--dump-config` 是 `dsh` 启动器（app-boot）的能力，不是这里必用的检查手段。
 
 ## 卸载与回退
 
-1. 删掉 `cordis.patch.yml` 里那三行 `insert`（只删自己加的，别删 `tinyfish-web` 等既有条目）。
-2. 重启应用（或等 HMR 重载）。插件卸载时 Cordis 会回收它的监听；`host.dispose()` 也挂在 `ctx.effect` 上。
-3. 需要的话删掉 `~/.dsh/plugins/harness-auto-continue/`。
+1. 删掉 `cordis.patch.yml` 里属于 `harness-auto-continue` 的整个 `insert` 条目，保留其他条目。
+2. 重启应用（或等 HMR 重载）。插件卸载时 Cordis 会回收监听，`host.dispose()` 会取消由宿主启动的续跑等待，防止卸载后再发送新 turn。已经开始的原生 turn 由 Harness 管理。
 
 回退成本很低，因为：
 
@@ -144,13 +116,13 @@ export default { name, inject, apply };
 
 ## 验证方式
 
-- 单元测试：`node --test test/harness-host.test.js`（25 项，覆盖触发、`willRetry` 期间不触发、工具未结算/待批准不触发、同指纹不重复续、预算与取消、缺失 seam 明确拒绝）。测试用的是**真实事件与 payload 形状的 mock**，不是真实模型调用。
+- 单元测试：`node --test test/harness-host.test.js`，覆盖触发、原生重试期间不触发、工具未结算/待批准不触发、同指纹不重复续、预算与取消、插件入口加载以及卸载期间的任务取消。测试用的是**真实事件与 payload 形状的 mock**，不是真实模型调用。
 - 手动冒烟（可选，需要你自己开应用）：断掉上游或让代理端口不可用，制造一次 `TRANSPORT` 终结 → 日志出现 `turn/end { reason.kind: 'error', code: 'TRANSPORT' }` → 几秒内会话里出现一条 `Continue from where the previous turn stopped.` 的用户消息，并且新 turn 正常跑完。
-- 关掉自动续跑做对照：把插件里的 `autoContinue: true` 改成 `false`，只留观察（宿主仍会记录拒绝原因，可通过 `host.diagnostics()` 读取）。
+- 关掉自动续跑做对照：移除插件条目并重启或重载。自行嵌入宿主时可以设置 `autoContinue: false`，再由调用方决定何时调用续跑接口。
 
 ## 未验证部分
 
-- 插件**没有**装进真实应用跑过，也没有对真实上游做过续跑实跑；仓库内的验证全部基于 mock 的原生契约。
-- 本文那段插件代码本身做过一次装载验证：用模仿 `ctx.on / ctx.agents.get / ctx.sessions.flush / ctx.effect / ctx.logger` 的假 Cordis 上下文导入并运行，确认 `createRequire` 能加载 `lib/harness-host.js`、`apply()` 能挂上监听、一次 `TRANSPORT` 终结后会发出且只发出一条续跑消息、`dispose()` 会回收。**没有**验证的是真实 Cordis Loader 的 `insert` 载入、HMR 重载和真实 Agent 的时序。
+- 插件**没有**装进桌面应用的实际 profile，也没有对真实上游做过续跑实跑；续跑行为验证使用 mock 会话。
+- 仓库插件入口已由 mock Cordis 上下文验证：一次 `TRANSPORT` 终结后只发出一条续跑消息，卸载会回收监听，落盘等待期间卸载不会继续发消息。安装版 Cordis Loader 的独立装载结果见[验证记录](verification.md)；它使用 mock `agents` / `sessions` 服务，不等于真实 Agent 时序验证。
 - HMR 热重载这条路径按 app-boot 文档与 base bundle 的 `hmr` 条目推断；实测以重启后行为为准。
 - 续跑 turn 的 UI 呈现（以普通用户消息出现）按 `user/message` 的日志语义推断，未截图核对。

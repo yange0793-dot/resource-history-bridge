@@ -1,13 +1,13 @@
 # 客户端续跑
 
-透明恢复只能处理**同一条请求**在输出前的可恢复故障。原生重试都耗尽、客户端已经报错停下时，要让任务自己接着跑，就得在客户端一侧发一个新的 turn。本组件提供这一层的策略与被验证的原生适配器，**不**提供客户端本体。
+透明恢复只能处理**同一条请求**在输出前的可恢复故障。原生重试都耗尽、客户端已经报错停下时，要让任务自己接着跑，就得在客户端一侧发一个新的 turn。本组件提供这一层的策略、Codex app-server 客户端与 Harness 插件。续跑行为由 mock 契约测试覆盖，真实客户端的协议和装载验证见下文。
 
 两个接口层分清楚：
 
 | 层 | 作用 | 是否已接到真实客户端 |
 | --- | --- | --- |
 | 请求层（`transparentRecovery`） | 同请求隐藏重试，成功后客户端完全无感 | 是，默认开（见[透明恢复](scope.md#透明恢复默认开启)） |
-| 续跑层（`createTurnContinuation` 与两个适配器） | 原生 turn 失败终结后，在同一会话发一次受控新 turn | 适配器按原生协议实现；宿主仍须提供会话状态接口 |
+| 续跑层（`createTurnContinuation` 与两个适配器） | 原生 turn 失败终结后，在同一会话发一次受控新 turn | 内置 Codex 客户端与 Harness 宿主已实现所需接口；自定义接入仍需提供宿主接口 |
 
 ## 为什么需要宿主参与
 
@@ -69,7 +69,7 @@ rhb-codex-continue --thread <threadId>
 rhb-codex-continue --thread <threadId> --max-continuations 2 --json
 ```
 
-- 协议面按 `codex-cli 0.162.1` 的 `generate-json-schema` 与真实 stdio 握手核对：行分隔 JSON-RPC 2.0，`id` 字符串或整数都会原样回显，错误是 `{id, error:{code,message}}`，通知多一个 `emittedAtMs`，`initialize` 之后要发 `initialized`。用到的方法是 `thread/resume`、`thread/turns/list`、`turn/start`；监听的通知是 `turn/started`、`turn/completed`、`error`、`serverRequest/resolved`。
+- 协议面于 2026-11-07 按本机 `codex-cli 0.167.0` 的 `generate-json-schema` 与真实 stdio 握手核对，当前调用无需新增参数：行分隔 JSON-RPC，`id` 字符串或整数都会原样回显，错误是 `{id, error:{code,message}}`，`initialize` 之后要发 `initialized`。用到的方法是 `thread/resume`、`thread/turns/list`、`turn/start`；监听的通知是 `turn/started`、`turn/completed`、`error`、`serverRequest/resolved`。真实冒烟使用临时 `CODEX_HOME`，不读取用户配置或会话。
 - `createCodexSnapshotReader` 只转述服务端报告的状态：线程不是 idle、失败 turn 不是最新、条目未完整加载、工具调用未结算、有待批审批、服务端给了 `willRetry`，任何一条不满足就拒绝并给出具体拒绝码，绝不推断“应该没事”。失败指纹不匹配也拒绝。
 - 退出码：0 完成、1 停止、2 用法错误、3 连不上 app server、130 中断。第二次 Ctrl+C 直接关闭子进程退出。
 - 未验证：没有在真实上游故障下观测到一次完整续跑（需要真实可恢复失败），item 状态语义来自生成的 schema 而非实测 turn。协议面本身由真实 `codex` 二进制冒烟覆盖。
@@ -92,11 +92,11 @@ const result = await continuation.run({ sessionId, failedTurn });
 - 当前安装版公开客户端契约**没有** turn 级别的重试或续跑调用，也没有持久 turn 身份，因此必须由宿主提供 `awaitTurn` 观测终态。缺少该接口时适配器抛 `HARNESS_SEAM_MISSING` 并说明原因，不会编造一层。
 - `describe().missingPublicSeam` 会如实列出缺失的原生能力。
 
-已安装的 Harness（0.2.1-rc.1）上这些接口怎么接、插件怎么装、哪些缺口补不了，见 [Harness 自动续跑插件](harness-plugin.md)。`lib/harness-host.js` 把 `createHarnessHost` 需要的 `readSnapshot` / `awaitTurn` / `prompt` 都从耐久 session 日志里折叠出来，不需要宿主另写。
+已安装的 Harness（0.2.1-rc.4）上这些接口怎么接、插件怎么装、哪些缺口补不了，见 [Harness 自动续跑插件](harness-plugin.md)。`lib/harness-host.js` 把 `createHarnessHost` 需要的 `readSnapshot` / `awaitTurn` / `prompt` 都从耐久 session 日志里折叠出来，不需要宿主另写。仓库内的 `plugins/harness-auto-continue.mjs` 可直接由 Cordis Loader 加载。
 
 ## 能力边界
 
 - 没有桌面运行器、没有 UI 自动化、没有键盘注入、没有按应用写死接线。
-- 真实 Codex.app / Harness 桌面端要落地，宿主还需提供：(a) 它自己传输上的 app-server JSON-RPC，(b) 从持久状态实现的 `readSnapshot`，(c) Codex 的 `reconcileStart` 与 Harness 的 `awaitTurn`。
-- 本仓库的验证使用 mock 原生契约，**不代表**已对真实客户端 GUI 做过续跑实跑。
+- 使用内置客户端或插件时，这些宿主接口已经提供；接入其他传输或会话存储时，才需要自行实现 JSON-RPC、`readSnapshot`、`reconcileStart` 或 `awaitTurn`。
+- 本仓库的续跑行为验证使用 mock 原生契约；另有真实 Codex 握手和安装版 Cordis Loader 装载验证，**不代表**已对真实客户端 GUI 做过续跑实跑。
 - 续跑会保留已完成的工具结果（历史和结果来自客户端自身），但模型在新 turn 中仍可能重复发起同一类工具调用；这不等于 exactly-once。
