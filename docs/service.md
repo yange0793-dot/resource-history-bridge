@@ -41,7 +41,7 @@ node .\service-cli.js status
 
 ## 安装内容与身份
 
-服务标识为 `org.resource-history-bridge.user`，不会接管历史的 `com.tufu.resource-history-bridge` 服务。
+服务标识为 `org.resource-history-bridge.user`，不会接管已有的手工部署服务。
 
 - macOS 数据目录：`~/Library/Application Support/org.resource-history-bridge.user`；定义：`~/Library/LaunchAgents/org.resource-history-bridge.user.plist`。
 - Linux 数据目录：`~/.local/share/org.resource-history-bridge.user`；定义：`~/.config/systemd/user/org.resource-history-bridge.user.service`。
@@ -84,4 +84,4 @@ node .\service-cli.js install
 
 `GET /health` 只返回服务名、版本和 ready 状态，且保留本机 Host / Origin 限制。健康接口证明桥已经监听，不证明端口属于某个安装、不证明模型请求成功，也不证明自然 Azure 或密文故障恢复率。后台管理还必须检查原生服务身份和文件指纹。
 
-当前开发验证的 45 项服务用例在本机三版 Node 通过，采用临时文件与注入的原生后端；真实仓库 macOS dry-run 通过，不在用户机器注册真实后台服务。修复后的九个跨平台 CI 作业成功，Windows 保留一项符号链接权限测试的明确跳过，PowerShell5.1 前台启动测试各 13/13。详见[当版验证记录](verification-automatic-runtime-20261026.json)；没有实际服务安装/启停与登录自启证据，不将模拟结果或前台启动当成后台部署成功。
+服务管理的验证采用临时文件与注入的原生后端，以及真实仓库 macOS dry-run，不在用户机器注册真实后台服务；没有实际服务安装/启停与登录自启证据，不将模拟结果或前台启动当成后台部署成功。测试结果见[验证记录](verification.md)。

@@ -366,6 +366,24 @@ for (const status of [401, 403, 422]) test(`HTTP ${status} never retries even wi
   assert.equal(f.requests.length, 1);
 });
 
+for (const [status, reason] of [[401, 'authentication'], [402, 'billing_quota'], [403, 'permission']]) {
+  test(`HTTP ${status} with unknown envelope fields preserves the terminal diagnostic`, async t => {
+    const original = '{"error":{"code":"token_invalid","message":"Synthetic failure"},"success":false}';
+    const events = [];
+    const f = await fixture(t, (_req, res) => send(res, status, original), {
+      diagnostics: { enabled: true, onEvent: event => events.push(event) }
+    });
+    const result = await post(f.address);
+    assert.equal(result.status, status);
+    assert.equal(result.text, original);
+    assert.equal(f.requests.length, 1);
+    const recovery = events.find(event => event.type === 'recovery');
+    assert.equal(recovery.classification, 'terminal');
+    assert.equal(recovery.retry.retry, false);
+    assert.equal(recovery.retry.reason, reason);
+  });
+}
+
 for (const payload of [emptyCompleted, emptyFailed]) test('optional DONE does not overwrite recoverable terminal evidence', async t => {
   const f = await fixture(t, (_req, res, n) => send(res, 200, n === 1 ? payload + 'data: [DONE]\n\n' : success, 'text/event-stream'));
   assert.equal((await post(f.address)).text, success);

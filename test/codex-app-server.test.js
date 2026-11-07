@@ -721,8 +721,15 @@ test('real codex app-server accepts the handshake and enforces the documented me
     return;
   }
   const version = (probe.stdout ?? '').trim();
-  const client = createCodexAppServerClient();
-  t.after(() => client.close());
+  const codexHome = fs.mkdtempSync(path.join(os.tmpdir(), 'rhb-codex-smoke-'));
+  const client = createCodexAppServerClient({
+    cwd: codexHome,
+    env: { ...process.env, CODEX_HOME: codexHome }
+  });
+  t.after(async () => {
+    await client.close();
+    fs.rmSync(codexHome, { recursive: true, force: true });
+  });
   const info = await client.initialize();
   assert.equal(info.platformFamily !== undefined || info.userAgent !== undefined, true);
   console.log(`REAL SMOKE: ${version}; initialize returned keys ${Object.keys(info).join(',')}`);

@@ -2,7 +2,7 @@
 
 // Harness host seams against the real installed event and call shapes. Every
 // fixture below is the payload `@deepseek-ai/dsh-agent` / `dsh-agent-loop` /
-// `dsh-session` 0.2.1-rc.1 actually produces: the same event types, the same
+// `dsh-session` 0.2.1-rc.4 actually produces: the same event types, the same
 // `turn/end` reason vocabulary, the same `LlmError#failure` fields, and the same
 // synchronous claim that `agent.followup()` performs.
 
@@ -544,6 +544,93 @@ test('cancelling the run stops the wait without sending another turn', async () 
   assert.equal(result.status, 'cancelled');
   assert.equal(result.reason, 'aborted');
   assert.equal(mock.sent.length, 1);
+});
+
+test('disposing the host cancels a continuation waiting for durable state', async t => {
+  const mock = createHarnessMock();
+  let releaseFlush;
+  const flush = new Promise(resolve => { releaseFlush = resolve; });
+  let enteredFlush;
+  const entered = new Promise(resolve => { enteredFlush = resolve; });
+  const host = createHost(mock, {
+    deadlineMs: 1000,
+    flushDurable: () => { enteredFlush(); return flush; }
+  });
+  t.after(() => host.dispose());
+  const turn = mock.failTurn({ code: 'TRANSPORT' });
+  const running = host.continueAfterFailure({
+    sessionId: SESSION, turnId: String(turn), failure: failureOf('TRANSPORT')
+  });
+
+  await entered;
+  host.dispose();
+  releaseFlush(true);
+  const result = await running;
+
+  assert.equal(mock.sent.length, 0);
+  assert.equal(result.status, 'cancelled');
+  assert.equal(result.reason, 'aborted');
+});
+
+test('packaged Harness plugin continues once and removes its listeners on unload', async t => {
+  const plugin = await import('../plugins/harness-auto-continue.mjs');
+  assert.equal(plugin.default.apply, plugin.apply);
+  assert.equal(plugin.name, 'harness-auto-continue');
+  assert.deepEqual(plugin.inject, ['agents', 'sessions']);
+  const mock = createHarnessMock();
+  const listeners = new Set();
+  const disposers = [];
+  const logs = [];
+  const ctx = {
+    on(name, handler) {
+      listeners.add(handler);
+      const off = mock.events.on(name, handler);
+      return () => { listeners.delete(handler); off(); };
+    },
+    agents: { get: mock.agentFor },
+    sessions: { flush: async () => true },
+    effect(start) { disposers.push(start()); },
+    logger: () => ({ info: message => logs.push(message) })
+  };
+  const unload = () => { for (const dispose of disposers.splice(0)) dispose(); };
+  t.after(unload);
+  plugin.apply(ctx);
+  assert.equal(listeners.size, 3);
+  assert.match(logs[0], /harness-auto-continue: enabled/);
+
+  mock.failTurn({ code: 'TRANSPORT' });
+  await waitFor(() => mock.sent.length === 1 && mock.agent.status === 'idle', 'the plugin continuation');
+  assert.equal(mock.sent[0].message.source.kind, 'user');
+  assert.equal(typeof mock.sent[0].message.source.rpcId, 'string');
+  unload();
+  assert.equal(listeners.size, 0);
+  mock.failTurn({ code: 'TRANSPORT' });
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(mock.sent.length, 1);
+});
+
+test('unloading the packaged plugin during a flush never enqueues a continuation', async t => {
+  const { apply } = await import('../plugins/harness-auto-continue.mjs');
+  const mock = createHarnessMock();
+  let releaseFlush;
+  const flush = new Promise(resolve => { releaseFlush = resolve; });
+  let enteredFlush;
+  const entered = new Promise(resolve => { enteredFlush = resolve; });
+  let unload;
+  apply({
+    on: mock.events.on,
+    agents: { get: mock.agentFor },
+    sessions: { flush: () => { enteredFlush(); return flush; } },
+    effect(start) { unload = start(); },
+    logger: () => ({ info() {} })
+  });
+  t.after(() => unload());
+  mock.failTurn({ code: 'TRANSPORT' });
+  await entered;
+  unload();
+  releaseFlush(true);
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(mock.sent.length, 0);
 });
 
 test('a turn that never becomes terminal expires on the deadline', async () => {

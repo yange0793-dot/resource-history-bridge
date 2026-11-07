@@ -150,6 +150,23 @@ test('complete failed payload with tool output cannot override inspector proof',
   assert.equal(s.current().attempt, 1);
 });
 
+test('unknown bytes under a deterministic terminal status keep the real reason and stay final', () => {
+  // An error envelope with an extra top-level key is unknown body content.
+  // HTTP 401 itself already decides the outcome, so the reported reason must
+  // name it instead of the unreadable body.
+  const opaque = { error: { message: 'Invalid token', code: 'token_invalid' }, success: false };
+  for (const [statusCode, reason] of [[401, 'authentication'], [403, 'permission'], [402, 'billing_quota']]) {
+    const s = session({ automaticRecovery: true });
+    const decision = s.decide(failure(opaque, { statusCode, output: { ...proof(), unknown: true }, unknownOutput: true }));
+    assert.equal(decision.retry, false);
+    assert.equal(decision.classification, 'terminal');
+    assert.equal(decision.reason, reason);
+    assert.equal(s.current().attempt, 1);
+    assert.equal(s.decide(failure()).retry, false);
+    assert.equal(s.current().attempt, 1);
+  }
+});
+
 test('official constructor URL is copied and failure upstream declarations cannot redirect scope', () => {
   const upstream = new URL(official);
   const s = session({ upstream, historyMode: 'minimal' });

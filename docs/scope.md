@@ -239,25 +239,4 @@ async function main() {
 
 ## 验证记录与未核范围
 
-验证按版本、执行环境和故障来源区分；历史数字不自动继承给新代码。当版（透明恢复 + 续跑）在本机 macOS Node.js 18.20.8 / 22.23.2 / 24.18.0 各 **1608/1608**，其中透明恢复 119 项、续跑 52 项；安装版 Harness 的 91 项与聚焦 parity 检查通过，临时监听关闭。该版已合入 `main`，并以新版本发布到本机 `8790`：`/health` 就绪、运行指纹与发布目录一致、客户端 profile SHA-256 未变；用该发布目录对 loopback 503→200 mock 冒烟，客户端只拿到最终 200。跨平台 CI 九组合通过；同一提交另一次 PR 运行中 Windows Node24 的 PowerShell5.1 启动子集失败一次，该子集本轮无代码改动且重跑通过，按环境抖动记录、未改断言。未复现自然 AgentRouter Azure 故障，未由真实桌面客户端驱动续跑适配器。见[当版记录](verification-transparent-recovery-20261026.json)。
-
-此前自动/嵌入/后台改造在本机 macOS 三版 Node 各 **1418/1418**，验证期间运行与测试文件指纹未变，修复后九个 CI 作业成功（Linux/macOS 各 1421/1421，Windows 各 1420 通过、0 失败、1 项符号链接权限跳过）。该版服务管理采用注入后端与真实仓库 dry-run，未执行真实用户会话的服务安装。下表第二行起均为历史版本证据，不以旧 CI 或旧客户端实验代替新代码。
-
-恢复测试在保留官方目标 URL 的同时，通过测试专用传输映射将 HTTP 请求送到本机 mock；不增加生产声明开关，不读取真实 key，也不实际出网。其他目标用例验证仅一次上游调用、请求/响应字节与协议保持、错误原样转发。
-
-- `node --test`：跨平台单测，使用 loopback mock，无需真实 key 或安装 Harness。
-- `node scripts/verify-harness.mjs` / `node scripts/verify-harness-parity.mjs`：安装版 PiAiAdapter 的定向 loopback 验证，不读取用户 profile/key，不修改安装文件，不冒充完整 GUI 或真实渠道实跑。需满足安装版要求（当前 ≥22.19），可用 `RHB_HARNESS_MODULES` 指定 `dsh/node_modules`；缺依赖即明确失败，不伪记通过。
-
-| 记录 | 能证明什么 | 不能证明什么 |
-| --- | --- | --- |
-| [2026-10-26 透明恢复与续跑](verification-transparent-recovery-20261026.json) | 本机 macOS 三版 Node 各 1608/1608，含透明恢复 119 项与续跑 52 项；安装版 Harness 91 项与 parity 检查通过；跨平台 CI 九组合通过；已合入 main 并作为本机 8790 新版本发布，健康、指纹与 profile 未变，发布目录对 loopback 503→200 冒烟只返回最终 200。 | 未复现自然 AgentRouter Azure 故障；续跑适配器只用 mock 原生契约测试，没有真实桌面客户端实跑；Windows PowerShell5.1 启动子集曾抖动一次并重跑通过；不证明长期负载或所有历史形状。 |
-| [2026-10-26 自动/嵌入/后台改造](verification-automatic-runtime-20261026.json) | 本机 macOS 三版 Node 各 1418/1418；同一默认入口处理 Responses/Messages，旧显式覆盖保留，嵌入会话复用相同恢复核心，预算与输出保护通过；安装版 Harness 71/91 与默认自动入口加密两轮续接 25 项通过；42 项服务用例及真实仓库 dry-run 通过。 | 已提交并推送功能分支、未合入 main 或部署；修复后九个 CI 作业成功，Linux/macOS 各 1421/1421，Windows 各 1420 通过、0 失败、1 项符号链接权限跳过，PowerShell5.1 启动各 13/13；首轮失败保留。服务测试使用注入后端，不证明真实安装、启停或登录自启。未接入正在运行的 Mixrouter，未修改客户端；不证明自然故障、完整 GUI、所有模型/历史或长期负载。 |
-| [2026-10-26 加密 reasoning 降级](verification-encrypted-reasoning-20261026.json) | 本机 Node.js 18/22/24 各 1078/1078，含新增 132 项明确错误、投影、预算、输出/未知/截断保护、作用域及脱敏检查；安装版 Harness 原有 71/91 项和新增两轮原生工具续接 25 项通过，可读摘要/纯密文两种历史按约定投影，调用方历史不改，临时连接已关闭。 | Windows/macOS/Linux × Node18/22/24 九个 CI 组合全部通过，含 PowerShell5.1 实际启动检查；均为 mock，不证明自然 AgentRouter 解密故障恢复。未验证安装版 Codex/Claude Code 的加密故障续接或完整 Harness GUI，不保证所有模型、历史形状或长期负载。已推送功能分支、未合入 main 或部署，未改客户端配置或重启服务。 |
-| [2026-10-26 目标识别与透传](verification-provider-scope-20261026.json) | 本机 Node.js 18/22/24 各 946/946；后续恢复原始伪造主机组合后受影响文件各 29/29。其他目标单次调用、原字节/协议/编码、上游错误透传；安装版 Codex 152 项两类注入均精确投影完成，Harness 71/91 项通过并清理临时资源。 | 已推送 `main`，本次 Windows/macOS/Linux × Node18/22/24 九个 CI 组合全部通过，含 PowerShell7/5.1；首次测试路径失败及后续原样重跑的超时样本已保留，未部署；不证明自然上游故障恢复率、所有历史或长期负载。 |
-| [2026-10-26 AgentRouter 聚焦](verification-agentrouter-focus-20261026.json) | 本机 Node.js 18/22/24 各 887/887；安装版 Codex 152 项复制历史的 Azure 包装与严格400注入均精确投影后完成；安装版 Harness 71 项与 91 项检查通过，临时 listener/socket 全关闭。候选两轮及合入 main 的 Windows/macOS/Linux × Node18/22/24 九个 CI 组合全部通过，Windows PowerShell7/5.1 实际启动检查通过。 | 不证明自然上游故障恢复率、所有历史类型、管理工具版本或长期负载；未修改本地客户端或重启现有服务。 |
-| [2026-10-26 Codex 同步](verification-codex-parity-20261026.json) | 此前 runtime cc89085：macOS Node.js 18/22/24 各 827/827；Ubuntu/macOS/Windows × 三版 Node 九个 CI job 成功，实际 PowerShell 启动检查。安装版 Codex 0.164.0 对 loopback 故障 mock 完成 152 项历史投影与工具续接；Harness parity 71 项、完整 91 项检查通过。 | 不验证本轮聚焦重构；Codex 故障与恢复响应均为 mock，不是自然 AgentRouter 跨资源故障；不覆盖所有历史或持续负载。 |
-| [2026-10-25 资源恢复](verification-resource-only-20261025.json) | 历史版本的真实 macOS Claude Code 工具续接、Codex 本机注入后真实 AgentRouter 恢复响应，以及小型 encrypted reasoning 两工具 API 对照；旧跨平台启动/恢复结果。 | 注入错误不来自真实上游；小型 API 对照不等于 Codex 长混合 CLI 历史通过，失败与限流样本仍保留。 |
-| [2026-10-25 Harness 连续恢复](verification-harness-recovery-20261025.json) | 历史连续恢复版本的 loopback 单测、安装版 PiAiAdapter、脱敏/预算/清理检查；一项普通真实上游 smoke。 | 非完整 Harness GUI，普通 smoke 非自然资源故障；记录中的当时 Windows/推送状态不代表后续同步版本。 |
-| [更早 Harness](verification-harness-20261025.json) / [早期验证](verification-20261025.json) | 早期行为及实验存档。 | 被取消的全客户端空响应策略不代表当前功能。 |
-
-此前同步和目标识别版本已有九平台 CI 成功及提交/推送/合入记录；当前加密 reasoning 降级版本也有独立九平台 CI 成功记录，已推送功能分支但未合入 main，两者不能混用。Windows CI 使用 mock，未验证 Windows 安装版 Claude Code/Codex 对真实 AgentRouter。配置管理工具仅有 endpoint 接入说明，未实测全部工具/版本。
+各版本的验证记录、测试方式与未核范围见[验证记录](verification.md)。

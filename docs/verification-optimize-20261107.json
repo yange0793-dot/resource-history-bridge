@@ -1,0 +1,237 @@
+{
+  "recordedAt": "2026-11-07T03:02:51.135Z",
+  "branch": "optimize/20261106",
+  "baseCommit": "a2cbf27122b16974c667c6383fa1adfdb65ab581",
+  "stage": "local verification before push",
+  "changes": [
+    "Preserve authentication, permission and billing status reasons for opaque terminal HTTP errors without enabling retries.",
+    "Interpret asctime Retry-After dates as GMT.",
+    "Cancel host-started continuations on Harness host disposal.",
+    "Ship a portable Cordis plugin entry and consolidate verification documentation."
+  ],
+  "sourceHashes": {
+    "bin/rhb-codex-continue.js": "707dfac633c1cfab11e43821e4f009b900a38f37676f23ba415bb6779ed13db9",
+    "cli.js": "f03e16af343d68766a05b724abc55711af9f1dc76b6505cb2a3fea8055f324d2",
+    "index.js": "8e8c45794c2b6c75c9935255e60507cf85529f3716b6d8bea2c8bb6d1141abc7",
+    "lib/agentrouter.js": "61fb2002dab7b36bdfccffe37806a9d60243b637a59f5cb2721059a72f8271c0",
+    "lib/bridge.js": "ff661e4285678dc52e84e011ee28e9a12b65bd06d43a38f7a21085dcd3807548",
+    "lib/client-config.js": "4ee4a8398a0edab160f78d8e4fb5a9e7fc2c9a40d651fc280586e6227433a9f4",
+    "lib/client-continuation.js": "9302b3db9b641ee68f1ba5191582a8ec4bccbf1ad635ecafbd234dac1e2fd979",
+    "lib/codex-app-server.js": "2c94b65f066e48be6c561f74a29b697aaa6110f18ab1f44d6557b7bb19eef8f9",
+    "lib/diagnostics.js": "bde3f329319f313ce6043a214c2b437544d4656de0f8ecbbfdcad492ce7af7b1",
+    "lib/encrypted-reasoning.js": "171e511ebed0db635a9aa6b256376d9d54578600116551fc8e4e796023ffde94",
+    "lib/harness-host.js": "b4d4ba6e233d7f9729fa7aa1ae2cc14d86d3dd2dbb9f66fb76213f24986fbef8",
+    "lib/history.js": "a85d19dd1b95a450eb658689ad548068f18951206dadf9c217feae857ff3b999",
+    "lib/messages.js": "639e78c458fc74129c3a6b4b3a0bc3a28beafc6326a8e936edfd4985a000e32b",
+    "lib/output.js": "95718bed314f29ac09270b48d380d2a506251e8d634fbe4da70c15dea1b4a259",
+    "lib/recovery-session.js": "62eab45d5f0f50cc99a4c5ec24835f078ff21a3b1520fa49f92278b69b4251f1",
+    "lib/recovery.js": "75004894d3ad0c7ae78f1b57ad36e39b4957c8ed959df6860a53f5d6d6e771d2",
+    "lib/request-profile.js": "1133590fc7946eee58a2de172d94bc5fd8907308254878673fc259bf839c9581",
+    "lib/service-manager.js": "88b403536df6a4a19c5f05462535fa7286c9283b42a793f371a8eab027faccbf",
+    "lib/sse.js": "910b03e4d7755ba2dea59b917e4627fb4492ef454fa14a21287247cd53b7e8cd",
+    "lib/turn-continuation.js": "529bf7c9a36063d5f0c6bb322e4ba90ae08d3a5c56a30e539e6206480fbd1223",
+    "lib/vendor/LICENSE": "c96afb89be940006627c891d9e5d1ce23b1c45db1bff210152e3ce1f8937ec08",
+    "lib/vendor/NOTICE": "e3347e15fcc4b5717aaee8fef5a67d121dedd361bc516b2051b510c2bd143e04",
+    "lib/vendor/tool-input-prune.js": "fdc31e3caa02cdc8aa07a7df7794432a75c0eaa32fa6057ad72b56883c2f3287",
+    "lib/vendor/upstream-relay.js": "4254bc894833f4878ad52474a47548aa14fae42b4b4328729e3e5c3007c4222d",
+    "lib/vendor/wire-responses.js": "0c0f34190215085f696e266e5c09ab4f0036234bfffd9804174da92f1b911e4a",
+    "package.json": "51f24d4c47576fa8dcb14ee03d9149539f06ba0f0d07bf40dfc3b84b36197501",
+    "plugins/harness-auto-continue.mjs": "32896cc2ae222794c5fca6eb8b65a6cbca6e1d36970953dc92c9df953f8290be",
+    "scripts/mock-agentrouter.cjs": "9e06ed6b6153a8d1be2aaee22ed02722a8d3ba6352e8d3de3b29d350a344370f",
+    "scripts/start-macos.command": "9476136e2606a736884afa119b167b70348c1fea0ee0fde2e1ebacbe5c36a195",
+    "scripts/start-windows.ps1": "755376b364ba3fdc29027a59f480ae4405542e2ac5a993b0ba478cd27f1068c7",
+    "scripts/verify-harness-parity.mjs": "a4ec33cd3a9018a41016a49a38665eefacf343f3b55a31bbac449c9a7a433ac9",
+    "scripts/verify-harness.mjs": "6b7225f5d03ba630eeae8288737daf5a9f01870c0fa217cbf1a87bace070ba56",
+    "service-cli.js": "5176bd2a324873ca550650a44fc130a7687285fff472fe7a2fa466602ab8a6ab",
+    "test/agentrouter.test.js": "d9f6b8e1516c693dec3ce503c43103fa97521e828f3750a7681218cc963ddc32",
+    "test/automatic-bridge.test.js": "928e7f19535fe76222816539f64403d7a50de24638b66ecd92b029989f2dfd3b",
+    "test/automatic-cli.test.js": "71810a163cdb25a479c298dd88aeb1d46e9b01f59589ff8453653babe1877b69",
+    "test/automatic-history.test.js": "5ab7660c07a8b66043675a1f8bb7e2a95cf5970b04093a48e66edac735db724a",
+    "test/bridge.test.js": "0e2edfda5d213d27e45158772544b7bb5c8f263bc12a8b5a4a231a4e5fb99c21",
+    "test/cli-recovery.test.js": "67992cf9ac92561f53d590a4dec4b4508d93fe8759fc9d2421c02ac39b5f6f8f",
+    "test/cli.test.js": "51ca180b110c45b5725016f59e6acc0b2faa80d058887eea6768c2eb83f4333e",
+    "test/client-config.test.js": "87295d592419c8c1d923154f5c2b04d700af26a42973bc265cda9c2da9bb96ff",
+    "test/client-continuation.test.js": "9cb5a1c05818b4b299cc1c4cff7674fd061759c38ea0d55dd6565eddb79571fd",
+    "test/codex-app-server.test.js": "3177981bed81a3ec4074c6743fe7463f8f997dc5af0e04af6b5d8171ee290bff",
+    "test/codex-continue-cli.test.js": "85c4a7183026a3f5813a10229a536b2cce021556070f9e235455bb9fa71ae768",
+    "test/codex-deadline.test.js": "a0e5b880367ee1370af9d50c9b29af4ade6c352d8812caf1eab446fbd33ffefa",
+    "test/codex-parity.test.js": "561dafbde00bbc66b4f5e875cf998c8bcdffb1b88cc0b0083d4ee2c6a4326c3c",
+    "test/compat.test.js": "46f2a90eb3f76afdb9ea772c220f4e131c513c1052c35049b786ac3c86aeac1e",
+    "test/diagnostics.test.js": "58e77f3fdfca632bcbc459c91e182cc41d5c5b8cd50cd9dd34f25e7c8f62b67d",
+    "test/encrypted-reasoning.test.js": "aaebb9387a9019e68ad18be67c32207b4f2f6d7c254d3bfa96cef47b31ded6f1",
+    "test/harness-host.test.js": "f511c7b027b258c9be96f769044564327191cfcabfe2893e214f9cb9b4bdc1eb",
+    "test/harness-parity.test.js": "393bb642b4fb65e97f7984c2025d8b50aadfca738a9ffbb74384504e53180aea",
+    "test/harness-projection.test.js": "dbeef255144c451eac0d1bbbd0323e1b21263a6c2bb97d1e6b190d5197f5f3a3",
+    "test/harness.test.js": "cd918913e8ff8d7e55930107528bbb1e0cad17018b9febb226d2356d24412fb4",
+    "test/history.test.js": "4b75421cce9e8e25457868858e1c80205fff38ec285757306319d6d0f7a07178",
+    "test/integration-recovery.test.js": "a0678eb92702572ff93e7ee835e884a94ef8274d61da96e3e52ec673fb99185b",
+    "test/messages.test.js": "e8d0732494f57b1fba41998717e948ff011efa439bd040b53cd1a3e73bc3046e",
+    "test/non-agentrouter.test.js": "8b125233c75899a4394a18553224e864eb8d43d2190707d51c51c2335adfffab",
+    "test/output.test.js": "bc58d8d14340f240d516f76a742e0aeb7609de597d69f49426f9b8c7165c611e",
+    "test/recovery-engine.test.js": "57717b80071136d306fdf7091ef817ac448e6a57cc4d0dcc664aef45a06b8183",
+    "test/recovery-session.test.js": "887331b3ee83d5dcc62e5058fce3d72b31fb20a41a61b9c4ee8c4808ff81d458",
+    "test/recovery.test.js": "a69dad48a83e23ff25a3280b0164968f5e832d9b5baeada0608eee789c5f3da8",
+    "test/resource-retry.test.js": "a1939e780a966d2e3d7106419e05f61ee1a1cfa470d87b249a04187b5d59d652",
+    "test/service-manager.test.js": "b6670ef51b08b98dcb32a60ed474fbb3c2053c93d691ecc186d71b258df59335",
+    "test/startup.test.js": "d31b57145309b12dfd2f36a9ff38ae189b179bb19101f8aac98a96eb6a1ab90a",
+    "test/transparent-recovery.test.js": "528671613e004f0dbe2184a6a117033df7127df5c21af9cae227b59654ca9754",
+    "test/turn-continuation.test.js": "b6f106140a6318821c01a111cb1e60965def6a86cb40024fbb93b64476ce20e1"
+  },
+  "sourceFingerprint": "84b429ab59b709cbb46eb3b2a436a71cc5076a8b46208272d0c4b43e4333e51d",
+  "regressionsReproducedBeforeFix": [
+    {
+      "test": "unknown bytes under a deterministic terminal status keep the real reason and stay final",
+      "actual": "unknown_output",
+      "expected": "authentication"
+    },
+    {
+      "test": "asctime Retry-After is read as GMT, not as the machine local zone",
+      "actual": 0,
+      "expected": 4000
+    },
+    {
+      "test": "disposing the host cancels a continuation waiting for durable state",
+      "actualSent": 1,
+      "expectedSent": 0
+    }
+  ],
+  "localTests": [
+    {
+      "node": "18.20.8",
+      "command": "node --test --test-reporter=spec",
+      "tests": 1688,
+      "pass": 1688,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "log": "full-node18.log",
+      "sha256": "110cc90688898ae2ca7035e5fdb975ebb8cfd362bc8bcd6b9e203bd93e1f1278"
+    },
+    {
+      "node": "22.23.3",
+      "command": "node --test --test-reporter=spec",
+      "tests": 1688,
+      "pass": 1688,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "log": "full-node22.log",
+      "sha256": "7c6cd5865c0ab6c04b0b50a29ec827369d07355950a07217eca2797c5eb0e004"
+    },
+    {
+      "node": "24.18.0",
+      "command": "node --test --test-reporter=spec",
+      "tests": 1688,
+      "pass": 1688,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "log": "full-node24.log",
+      "sha256": "4e062b06d1b624a97ec93823c260d575b2394dbb9f9ebfd2ed10ba11280997a5"
+    }
+  ],
+  "focused": {
+    "recovery": {
+      "tests": 171,
+      "pass": 171
+    },
+    "codexAndContinuation": {
+      "tests": 90,
+      "pass": 90,
+      "log": "codex-focused.log"
+    },
+    "harnessHost": {
+      "tests": 28,
+      "pass": 28
+    },
+    "relayAndPassthrough": {
+      "tests": 300,
+      "pass": 300,
+      "log": "relay-focused.log"
+    }
+  },
+  "codex": {
+    "version": "0.167.0",
+    "generatedSchemaHashes": {
+      "v1/InitializeParams.json": "c608ff6bdd94e661423dca9b44cd1dcea7eac610f74e1310284c61eab64280bc",
+      "v1/InitializeResponse.json": "62ad689c2cb6379913c1d72749cfd8de5089d35760214123518eb92eef11acc9",
+      "v2/ThreadResumeParams.json": "cba2b0a25e99cc2a9ea083f3ad8cea4d1a3a198922d8c2ba5224b6414eff7334",
+      "v2/ThreadResumeResponse.json": "f450bafe946842b04e49db3e661738b52d8a64f32089fe4fe9ae9c5eab5b8498",
+      "v2/ThreadTurnsListParams.json": "2a8b93d7d4437cc25e16a1dde16d8db3c338d39e16c5eece2a56e943a21577d7",
+      "v2/ThreadTurnsListResponse.json": "bccb5eb4fcde318825e4e92cadb85cda57315fceb9e46a3b6dc0582f91c2c72b",
+      "v2/TurnStartParams.json": "4e25cd48986f73e600d9949a055ddb994a75b4a38790e935274646f0fece00ad",
+      "v2/TurnStartResponse.json": "b75b88c2f507685b948d06166b5436678fd320c9878883d97f5a17f620a25116",
+      "v2/TurnCompletedNotification.json": "00b691508bb0187ecc5f080bb1608add7137672698daed6922967ad90bcb16e1",
+      "v2/ErrorNotification.json": "4b6e588b00241f0d1565b92991ec83b73bfdcf8dea0b96707278834ce719b444",
+      "v2/ServerRequestResolvedNotification.json": "4f03d586a5af04edd912cad08cc97eceb658e7e06744565e6d41a93e04a55966"
+    },
+    "usedProtocolChangesRequired": false,
+    "realSmoke": {
+      "temporaryCodexHome": true,
+      "initialize": true,
+      "unknownMethodRefused": true,
+      "nilThreadResumeRefused": true,
+      "loadedThreads": 0,
+      "modelCalls": 0
+    }
+  },
+  "harness": {
+    "version": "0.2.1-rc.4",
+    "inspectedInstalledHashes": {
+      "dsh-agent": "8673b5cfadfbb6e6ce0bcb341d0ea2877adc2986eab1c2b6c8baf32726534c92",
+      "dsh-agent-loop": "cacc1335705b8b6ff8a5e78222918fa9a83b643cb2c2542f00cae31ac133ea1f",
+      "dsh-session": "cfa7963b0ce1e660bd2815b66cb3e4b86d55a6534603f50e785d71ef0864e995",
+      "cordis": "e2154e2748ace61fa34631cd3081b9fe71c8d744e5a6b90d36c659f44d6470eb",
+      "cordis-plugin-loader": "bf2cf32746fa3a249ca95518993795a7f49595fe26772ceefc5fc9b645e92a0e"
+    },
+    "adapter": {
+      "ok": true,
+      "checks": 91,
+      "cleanup": {
+        "bridgeListening": false,
+        "upstreamListening": false,
+        "fixtureSockets": 0
+      },
+      "log": "harness-adapter.json",
+      "sha256": "e7cd1861d3e8a4129f7bb2f1ebfa74a84852c13e02a1c1a4c6ec842ccbdda8b6"
+    },
+    "parity": {
+      "ok": true,
+      "checks": 71,
+      "cleanup": {
+        "bridgeListening": false,
+        "legacyBridgeListening": false,
+        "upstreamListening": false,
+        "sockets": 0
+      },
+      "log": "harness-parity.json",
+      "sha256": "e6a98ef1b3b46882a42d613dd23f78e2aebe527bb6acac185608c6236e082277"
+    },
+    "cordisPlugin": {
+      "harness": "0.2.1-rc.4",
+      "cordis": "4.0.5",
+      "loader": "1.0.6",
+      "load": true,
+      "unload": true,
+      "reload": true,
+      "enabledEvents": 2,
+      "services": "mock",
+      "profileModified": false,
+      "modelCalls": 0
+    }
+  },
+  "ci": {
+    "status": "not run at record time",
+    "matrix": "ubuntu/macos/windows x Node 18/22/24"
+  },
+  "boundaries": {
+    "apiExportsChanged": false,
+    "thirdPartyDependenciesAdded": false,
+    "clientConfigurationChanged": false,
+    "liveServiceChanged": false,
+    "realUpstreamCalls": 0,
+    "desktopGuiContinuationVerified": false,
+    "desktopHmrWatcherVerified": false,
+    "mergedIntoMain": false
+  }
+}
